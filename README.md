@@ -27,3 +27,23 @@ Safely removes Sophos Endpoint from Windows machines managed by MEEC.
 - Use on Windows 10/11 devices where **Tamper Protection is already disabled**.
 - Typically followed by installing the new **Nonprofit** Sophos package.
 
+
+
+### Test-SophosMigration.ps1
+Location: `sophos/Test-SophosMigration.ps1`
+
+Validation script used during Sophos license migration.
+Checks:
+
+- Services running or removed
+- Folder presence
+- Sophos Central health (post-install)
+- Logs results to MEEC and local log file
+
+Supports:
+`-Phase PostUninstall`
+`-Phase PostInstall`
+
+Use this script after uninstall/removal or after Non-Profit install.
+
+
