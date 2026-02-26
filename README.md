@@ -1,7 +1,8 @@
 # System Engineering Scripts Repository
 
 This repository contains production-ready automation scripts used for
-endpoint management and environment maintenance of Hillspires Manage Engine Environment.
+endpoint management and environment maintenance of Hillspires Environments. This will also
+include web development scrips, jamf related scripts and more. 
 
 ---
 
