@@ -4,7 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Rise Fellows Directory</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 <style>
   /* ── SWAP THIS URL with your published Google Sheets CSV link ── */
   :root { --teal: #1a7a6e; --navy: #1a2744; --gold: #c9a84c; }
@@ -162,7 +161,7 @@
      ║  PASTE YOUR GOOGLE SHEETS CSV URL BELOW         ║
      ╚══════════════════════════════════════════════════╝ -->
 <script>
-const SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTM4Cdqmq3y9dS5PTX4qx2WCEuUThbpf-x9AZ4EpFP1JoZMgR7N7rJDk1EvHJ6Q2JqgR_9hozUU7hrC/pub?gid=2104307297&single=true&output=csv";
+const API_URL = "https://script.google.com/macros/s/AKfycbxWpy7prAGQ13eOeXIOZoUfIsZ_yynbAQar33rthMfnYs4J01fXnZknhdphSR1yMnuK/exec";
 </script>
 
 <div class="toolbar">
@@ -395,20 +394,17 @@ document.addEventListener("keydown", e => e.key === "Escape" && closeModal());
 
 // ── Init ──────────────────────────────────────────────────────────────
 async function init() {
-  if (SHEET_CSV_URL === "YOUR_GOOGLE_SHEETS_CSV_URL_HERE") {
-    document.getElementById("grid").innerHTML =
-      `<div class="status">⚙️ Paste your Google Sheets CSV URL into the SHEET_CSV_URL variable at the top of the script.</div>`;
-    return;
-  }
   try {
-    const rows = await parseCSV(SHEET_CSV_URL);
-    allPeople = rows.map(normalise).filter(p => p.name);
+    const res = await fetch(API_URL);
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    allPeople = data.records.filter(p => p.name);
     filtered = [...allPeople];
     buildFilters(allPeople);
     renderGrid();
   } catch(e) {
     document.getElementById("grid").innerHTML =
-      `<div class="status">❌ Could not load directory. Check your CSV URL and make sure the sheet is published publicly.</div>`;
+      `<div class="status">❌ Could not load directory. Error: ${e.message}</div>`;
   }
 }
 
