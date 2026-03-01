@@ -238,7 +238,9 @@ const countryToCode = {
 
 function flagEmoji(country) {
   if (!country) return "🌍";
-  const code = countryToCode[country.toLowerCase().trim()];
+  const str = Array.isArray(country) ? country[0] : country;
+  if (!str) return "🌍";
+  const code = countryToCode[str.toLowerCase().trim()];
   if (!code) return "🌍";
   return [...code].map(c => String.fromCodePoint(0x1F1E6 - 65 + c.charCodeAt(0))).join('');
 }
