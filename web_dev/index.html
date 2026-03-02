@@ -5,174 +5,245 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Rise Fellows Directory</title>
 <style>
-  /* ── SWAP THIS URL with your published Google Sheets CSV link ── */
-  :root { --teal: #1a7a6e; --navy: #1a2744; --gold: #c9a84c; }
+  :root {
+    --navy: #1a2744;
+    --teal: #0099a8;
+    --gold: #f5a623;
+    --light-bg: #f7f8fa;
+    --border: #e2e5ea;
+    --text: #333;
+    --muted: #666;
+  }
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: Arial, sans-serif; background: #f4f4f4; color: #222; }
+  body { font-family: Arial, sans-serif; background: #fff; color: var(--text); }
 
-  /* Search & Filters */
+  /* ── Toolbar ── */
   .toolbar {
     background: #fff;
-    padding: 14px 16px;
-    border-bottom: 1px solid #ddd;
+    padding: 16px;
+    border-bottom: 1px solid var(--border);
     position: sticky; top: 0; z-index: 100;
   }
+
   .search-row {
     display: flex; align-items: center; gap: 10px;
-    border: 1px solid #ccc; border-radius: 4px;
-    padding: 8px 12px; margin-bottom: 10px;
-    background: #fff;
+    border: 1px solid var(--border); border-radius: 4px;
+    padding: 10px 14px; margin-bottom: 12px; background: #fff;
   }
   .search-row input {
     flex: 1; border: none; outline: none;
-    font-size: 14px; color: #333;
+    font-size: 14px; color: var(--text);
   }
-  .search-row svg { color: #888; flex-shrink: 0; }
-  .filter-row { display: flex; gap: 8px; flex-wrap: wrap; }
-  select {
-    padding: 7px 10px; border: 1px solid #ccc; border-radius: 4px;
-    font-size: 13px; background: #fff; color: #333; cursor: pointer;
-    min-width: 150px;
+  .search-row svg { color: var(--muted); flex-shrink: 0; }
+
+  .filter-row { display: flex; gap: 10px; flex-wrap: wrap; }
+  .filter-wrap {
+    display: flex; align-items: center; gap: 6px;
+    border: 1px solid var(--border); border-radius: 4px;
+    padding: 7px 10px; background: #fff; flex: 1; min-width: 140px;
+  }
+  .filter-wrap svg { color: var(--muted); flex-shrink: 0; }
+  .filter-wrap select {
+    border: none; outline: none; font-size: 13px;
+    color: var(--text); background: transparent;
+    cursor: pointer; flex: 1; appearance: none;
   }
 
-  /* Count */
-  .meta { padding: 8px 16px; font-size: 13px; color: #666; }
+  /* ── Meta ── */
+  .meta { padding: 10px 16px; font-size: 13px; color: var(--muted); }
 
-  /* Grid */
+  /* ── Grid ── */
   .grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-    gap: 16px; padding: 16px;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1px;
+    background: var(--border);
+    border-top: 1px solid var(--border);
   }
 
-  /* Card */
+  /* ── Card ── */
   .card {
-    background: #fff; border-radius: 6px;
-    overflow: hidden; cursor: pointer;
-    border: 1px solid #e0e0e0;
-    transition: box-shadow .2s, transform .15s;
-    display: flex; flex-direction: column;
+    background: #fff;
+    display: flex;
+    flex-direction: row;
+    cursor: pointer;
+    transition: background .15s;
+    padding: 16px;
+    gap: 14px;
+    align-items: flex-start;
   }
-  .card:hover { box-shadow: 0 4px 16px rgba(0,0,0,.15); transform: translateY(-2px); }
+  .card:hover { background: var(--light-bg); }
 
+  .card-photo-wrap {
+    position: relative;
+    flex-shrink: 0;
+    width: 100px;
+    height: 110px;
+  }
   .card-img {
-    width: 100%; aspect-ratio: 1/1;
+    width: 100%; height: 100%;
     object-fit: cover; object-position: top;
-    background: #ddd; display: block;
+    display: block;
   }
   .card-img-placeholder {
-    width: 100%; aspect-ratio: 1/1;
+    width: 100%; height: 100%;
     background: var(--navy);
     display: flex; align-items: center; justify-content: center;
-    font-size: 40px; font-weight: 700; color: #fff;
+    font-size: 28px; font-weight: 700; color: #fff;
+  }
+  .card-flag {
+    position: absolute;
+    top: 4px; right: 4px;
+    font-size: 16px;
+    line-height: 1;
+    filter: drop-shadow(0 1px 2px rgba(0,0,0,.3));
   }
 
-  .card-body { padding: 12px; flex: 1; }
-  .card-flag { font-size: 18px; margin-bottom: 4px; }
-  .card-name { font-size: 15px; font-weight: 700; color: var(--navy); margin-bottom: 3px; }
-  .card-cohort { font-size: 12px; color: #666; margin-bottom: 6px; }
+  .card-body { flex: 1; min-width: 0; }
+  .card-name {
+    font-size: 15px; font-weight: 700;
+    color: var(--navy); margin-bottom: 4px;
+  }
+  .card-cohort {
+    font-size: 13px; color: var(--muted); margin-bottom: 10px;
+  }
   .card-cohort span { color: var(--teal); font-weight: 600; }
-  .card-email { font-size: 12px; color: var(--teal); word-break: break-all; }
+  .card-email {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 12px; color: var(--text);
+  }
+  .email-icon {
+    width: 20px; height: 20px; border-radius: 3px;
+    background: var(--gold);
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .email-icon svg { color: #fff; }
 
-  /* Modal */
+  /* ── Pagination ── */
+  .pagination {
+    display: flex; justify-content: center; align-items: center;
+    gap: 4px; padding: 20px 16px;
+    border-top: 1px solid var(--border);
+  }
+  .page-btn {
+    width: 32px; height: 32px; border-radius: 4px;
+    border: 1px solid var(--border); background: #fff;
+    font-size: 13px; cursor: pointer; color: var(--text);
+    display: flex; align-items: center; justify-content: center;
+    transition: all .15s;
+  }
+  .page-btn:hover { background: var(--light-bg); }
+  .page-btn.active { background: var(--navy); color: #fff; border-color: var(--navy); }
+  .page-btn:disabled { opacity: .4; cursor: default; }
+
+  /* ── Modal ── */
   .overlay {
     display: none; position: fixed; inset: 0;
-    background: rgba(0,0,0,.55); z-index: 999;
+    background: rgba(0,0,0,.5); z-index: 999;
     align-items: center; justify-content: center; padding: 20px;
   }
   .overlay.open { display: flex; }
 
   .modal {
-    background: #fff; border-radius: 8px;
-    max-width: 780px; width: 100%;
+    background: #fff; border-radius: 6px;
+    max-width: 720px; width: 100%;
     max-height: 90vh; overflow-y: auto;
-    position: relative; display: flex;
-    flex-wrap: wrap;
+    position: relative; display: flex; flex-wrap: wrap;
   }
 
   .modal-left {
-    width: 240px; flex-shrink: 0;
+    width: 220px; flex-shrink: 0;
     padding: 24px 20px 24px 24px;
-    display: flex; flex-direction: column; align-items: flex-start;
   }
   .modal-photo {
-    width: 200px; height: 220px;
+    width: 180px; height: 200px;
     object-fit: cover; object-position: top;
-    border-radius: 4px; margin-bottom: 14px;
-    background: #ddd;
+    border-radius: 3px; margin-bottom: 14px;
   }
   .modal-photo-placeholder {
-    width: 200px; height: 220px;
-    border-radius: 4px; margin-bottom: 14px;
+    width: 180px; height: 200px;
+    border-radius: 3px; margin-bottom: 14px;
     background: var(--navy);
     display: flex; align-items: center; justify-content: center;
-    font-size: 56px; font-weight: 700; color: #fff;
+    font-size: 48px; font-weight: 700; color: #fff;
   }
-  .modal-name { font-size: 18px; font-weight: 700; color: var(--navy); margin-bottom: 6px; }
-  .modal-email { font-size: 13px; color: #555; word-break: break-all; }
+  .modal-name { font-size: 17px; font-weight: 700; color: var(--navy); margin-bottom: 6px; }
+  .modal-email-row {
+    display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text);
+  }
 
   .modal-right {
     flex: 1; min-width: 260px;
-    padding: 24px 28px 24px 8px;
-    border-left: 1px solid #eee;
+    padding: 24px 28px 24px 12px;
+    border-left: 1px solid var(--border);
   }
   .modal-country-row {
     display: flex; align-items: center; gap: 8px;
-    margin-bottom: 12px; font-size: 14px; font-weight: 600; color: #444;
+    margin-bottom: 10px; font-size: 14px; font-weight: 700;
+    color: var(--muted); letter-spacing: .5px;
   }
-  .modal-flag { font-size: 24px; }
+  .modal-flag { font-size: 22px; }
   .modal-cohort {
-    font-size: 16px; font-weight: 700; margin-bottom: 14px;
+    font-size: 15px; font-weight: 700; margin-bottom: 14px;
     color: var(--navy);
   }
-  .modal-cohort .winner-label { color: var(--gold); margin-left: 6px; }
-  .modal-bio { font-size: 14px; line-height: 1.65; color: #333; margin-bottom: 16px; }
-  .modal-field { font-size: 14px; margin-bottom: 8px; }
+  .modal-cohort .winner-label { color: var(--gold); margin-left: 6px; font-weight: 700; }
+  .modal-bio { font-size: 13px; line-height: 1.7; color: var(--text); margin-bottom: 16px; }
+  .modal-field { font-size: 13px; margin-bottom: 8px; color: var(--text); }
   .modal-field strong { color: var(--navy); }
-  .modal-field a, .modal-field span.link { color: var(--teal); }
+  .modal-field a { color: var(--teal); text-decoration: none; }
+  .modal-field a:hover { text-decoration: underline; }
 
   .close-btn {
     position: absolute; top: 12px; right: 14px;
-    background: none; border: none; font-size: 22px;
-    cursor: pointer; color: #666; line-height: 1;
+    background: none; border: none; font-size: 20px;
+    cursor: pointer; color: var(--muted); line-height: 1;
   }
   .close-btn:hover { color: #000; }
 
-  /* Loading / empty */
-  .status { text-align: center; padding: 60px 20px; color: #888; grid-column: 1/-1; }
+  /* ── Status ── */
+  .status { text-align: center; padding: 60px 20px; color: var(--muted); grid-column: 1/-1; }
   .spinner {
-    width: 36px; height: 36px; border: 3px solid #ddd;
+    width: 32px; height: 32px; border: 3px solid var(--border);
     border-top-color: var(--teal); border-radius: 50%;
     animation: spin .7s linear infinite; margin: 0 auto 12px;
   }
   @keyframes spin { to { transform: rotate(360deg); } }
 
-  @media (max-width: 560px) {
-    .modal-left { width: 100%; padding-bottom: 0; align-items: center; }
-    .modal-right { border-left: none; border-top: 1px solid #eee; padding: 16px 20px; }
-    .modal-photo, .modal-photo-placeholder { width: 160px; height: 180px; }
+  @media (max-width: 600px) {
+    .grid { grid-template-columns: 1fr; }
+    .modal-left { width: 100%; padding-bottom: 0; }
+    .modal-right { border-left: none; border-top: 1px solid var(--border); padding: 16px 20px; }
   }
 </style>
 </head>
 <body>
 
-<!-- ╔══════════════════════════════════════════════════╗
-     ║  PASTE YOUR GOOGLE SHEETS CSV URL BELOW         ║
-     ╚══════════════════════════════════════════════════╝ -->
 <script>
 const API_URL = "https://script.google.com/macros/s/AKfycbxWpy7prAGQ13eOeXIOZoUfIsZ_yynbAQar33rthMfnYs4J01fXnZknhdphSR1yMnuK/exec";
+const PAGE_SIZE = 20;
 </script>
 
 <div class="toolbar">
   <div class="search-row">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-    <input id="search" type="text" placeholder="Search by Name, University, Areas of Interest, Current Location, Countries Represented">
+    <input id="search" type="text" placeholder="Search by Name & University & Areas of Interest & Current Location & Countries Represented">
   </div>
   <div class="filter-row">
-    <select id="f-year"><option value="">All Cohorts</option></select>
-    <select id="f-country"><option value="">All Countries</option></select>
-    <select id="f-location"><option value="">All Locations</option></select>
+    <div class="filter-wrap">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
+      <select id="f-year"><option value="">All Cohorts</option></select>
+    </div>
+    <div class="filter-wrap">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 010 20M12 2a15.3 15.3 0 000 20"/></svg>
+      <select id="f-country"><option value="">All Countries</option></select>
+    </div>
+    <div class="filter-wrap">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+      <select id="f-location"><option value="">All Locations</option></select>
+    </div>
   </div>
 </div>
 
@@ -180,6 +251,7 @@ const API_URL = "https://script.google.com/macros/s/AKfycbxWpy7prAGQ13eOeXIOZoUf
 <div class="grid" id="grid">
   <div class="status"><div class="spinner"></div>Loading directory…</div>
 </div>
+<div class="pagination" id="pagination"></div>
 
 <!-- Modal -->
 <div class="overlay" id="overlay">
@@ -188,7 +260,10 @@ const API_URL = "https://script.google.com/macros/s/AKfycbxWpy7prAGQ13eOeXIOZoUf
     <div class="modal-left">
       <div id="m-photo"></div>
       <div class="modal-name" id="m-name"></div>
-      <div class="modal-email" id="m-email"></div>
+      <div class="modal-email-row">
+        <div class="email-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg></div>
+        <span id="m-email"></span>
+      </div>
     </div>
     <div class="modal-right">
       <div class="modal-country-row">
@@ -205,7 +280,7 @@ const API_URL = "https://script.google.com/macros/s/AKfycbxWpy7prAGQ13eOeXIOZoUf
 </div>
 
 <script>
-// ── Country → flag emoji ───────────────────────────────────────────────
+// ── Country → flag ────────────────────────────────────────────────────
 const countryToCode = {
   "afghanistan":"AF","albania":"AL","algeria":"DZ","angola":"AO","argentina":"AR",
   "armenia":"AM","australia":"AU","austria":"AT","azerbaijan":"AZ","bahrain":"BH",
@@ -246,48 +321,22 @@ function flagEmoji(country) {
 }
 
 function initials(name) {
-  return (name || "?").split(" ").filter(Boolean).map(w => w[0]).join("").toUpperCase().slice(0,2);
+  return (name||"?").split(" ").filter(Boolean).map(w=>w[0]).join("").toUpperCase().slice(0,2);
 }
 
-// ── Data ──────────────────────────────────────────────────────────────
-let allPeople = [], filtered = [];
-
-function parseCSV(url) {
-  return new Promise((res, rej) => {
-    Papa.parse(url, {
-      download: true, header: true, skipEmptyLines: true,
-      complete: r => res(r.data),
-      error: e => rej(e)
-    });
-  });
+function photoImg(url, cls, phCls, name) {
+  if (url) return `<img class="${cls}" src="${url}" alt="${name}" onerror="this.outerHTML='<div class=\\'${phCls}\\'>${initials(name)}</div>'" loading="lazy">`;
+  return `<div class="${phCls}">${initials(name)}</div>`;
 }
 
-// Normalise a row → consistent field names regardless of CSV column casing
-function normalise(row) {
-  const g = k => {
-    const found = Object.keys(row).find(r => r.trim().toLowerCase() === k.toLowerCase());
-    return found ? (row[found] || "").trim() : "";
-  };
-  return {
-    id:          g("Unique Contact ID"),
-    name:        g("Full Name"),
-    firstName:   g("Preferred First Name"),
-    year:        g("Selection Year"),
-    bio:         g("Winner Bio"),
-    photo:       g("Winner Photo"),
-    email:       g("Email"),
-    country:     g("Current Location (Country)"),
-    city:        g("Current Location (City/Town)"),
-    countries:   g("Countries Represented"),
-    pronouns:    g("Pronouns"),
-    linkedin:    g("LinkedIn"),
-  };
-}
+// ── State ─────────────────────────────────────────────────────────────
+let allPeople = [], filtered = [], currentPage = 1;
 
+// ── Filters ───────────────────────────────────────────────────────────
 function populateFilter(id, values) {
   const sel = document.getElementById(id);
   const cur = sel.value;
-  [...sel.options].slice(1).forEach(o => o.remove());
+  [...sel.options].slice(1).forEach(o=>o.remove());
   [...new Set(values.filter(Boolean).sort())].forEach(v => {
     const o = document.createElement("option");
     o.value = o.textContent = v;
@@ -297,83 +346,99 @@ function populateFilter(id, values) {
 }
 
 function buildFilters(people) {
-  populateFilter("f-year",     people.map(p => p.year));
-  populateFilter("f-country",  people.map(p => p.countries || p.country));
-  populateFilter("f-location", people.map(p => p.country));
+  populateFilter("f-year",     people.map(p=>p.year));
+  populateFilter("f-country",  people.map(p=>p.countries||p.country));
+  populateFilter("f-location", people.map(p=>p.country));
 }
 
 function applyFilters() {
-  const q    = document.getElementById("search").value.toLowerCase();
-  const yr   = document.getElementById("f-year").value;
-  const cty  = document.getElementById("f-country").value;
-  const loc  = document.getElementById("f-location").value;
-
+  const q   = document.getElementById("search").value.toLowerCase();
+  const yr  = document.getElementById("f-year").value;
+  const cty = document.getElementById("f-country").value;
+  const loc = document.getElementById("f-location").value;
   filtered = allPeople.filter(p => {
-    const matchQ = !q || [p.name, p.year, p.bio, p.country, p.city, p.countries]
-      .some(v => v.toLowerCase().includes(q));
-    const matchYr  = !yr  || p.year === yr;
-    const matchCty = !cty || p.countries === cty || p.country === cty;
-    const matchLoc = !loc || p.country === loc;
-    return matchQ && matchYr && matchCty && matchLoc;
+    const mQ  = !q  || [p.name,p.year,p.bio,p.country,p.city,p.countries].some(v=>(v||"").toLowerCase().includes(q));
+    const mYr = !yr  || p.year === yr;
+    const mC  = !cty || p.countries === cty || p.country === cty;
+    const mL  = !loc || p.country === loc;
+    return mQ && mYr && mC && mL;
   });
+  currentPage = 1;
   renderGrid();
 }
 
-// ── Render ─────────────────────────────────────────────────────────────
-function photoImg(url, cls, altCls, name) {
-  if (url) {
-    return `<img class="${cls}" src="${url}" alt="${name}" onerror="this.outerHTML='<div class=\\'${altCls}\\'>${initials(name)}</div>'" loading="lazy">`;
-  }
-  return `<div class="${altCls}">${initials(name)}</div>`;
-}
-
+// ── Render ────────────────────────────────────────────────────────────
 function renderGrid() {
-  const grid = document.getElementById("grid");
-  document.getElementById("meta").textContent =
-    filtered.length === allPeople.length
-      ? `${allPeople.length} Fellows`
-      : `${filtered.length} of ${allPeople.length} Fellows`;
+  const total = filtered.length;
+  const pages = Math.ceil(total / PAGE_SIZE);
+  const start = (currentPage - 1) * PAGE_SIZE;
+  const slice = filtered.slice(start, start + PAGE_SIZE);
 
-  if (!filtered.length) {
-    grid.innerHTML = `<div class="status">No results found. Try a different search or filter.</div>`;
+  document.getElementById("meta").textContent =
+    total === allPeople.length ? `${allPeople.length} Fellows` : `${total} of ${allPeople.length} Fellows`;
+
+  const grid = document.getElementById("grid");
+  if (!slice.length) {
+    grid.innerHTML = `<div class="status">No results found.</div>`;
+    document.getElementById("pagination").innerHTML = "";
     return;
   }
 
-  grid.innerHTML = filtered.map((p, i) => `
-    <div class="card" data-i="${i}" tabindex="0">
-      ${photoImg(p.photo, "card-img", "card-img-placeholder", p.name)}
+  grid.innerHTML = slice.map((p,i) => `
+    <div class="card" data-i="${start+i}" tabindex="0">
+      <div class="card-photo-wrap">
+        ${photoImg(p.photo,"card-img","card-img-placeholder",p.name)}
+        <span class="card-flag">${flagEmoji(p.countries||p.country)}</span>
+      </div>
       <div class="card-body">
-        <div class="card-flag">${flagEmoji(p.countries || p.country)}</div>
         <div class="card-name">${p.name}</div>
         <div class="card-cohort">Cohort: <span>${p.year}</span></div>
-        ${p.email ? `<div class="card-email">✉ ${p.email}</div>` : ""}
+        ${p.email ? `<div class="card-email">
+          <div class="email-icon"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg></div>
+          <span>${p.email}</span>
+        </div>` : ""}
       </div>
     </div>
   `).join("");
 
   grid.querySelectorAll(".card").forEach(el => {
-    el.addEventListener("click", () => openModal(filtered[+el.dataset.i]));
-    el.addEventListener("keydown", e => e.key === "Enter" && openModal(filtered[+el.dataset.i]));
+    el.addEventListener("click", ()=>openModal(filtered[+el.dataset.i]));
+    el.addEventListener("keydown", e=>e.key==="Enter"&&openModal(filtered[+el.dataset.i]));
+  });
+
+  renderPagination(pages);
+}
+
+function renderPagination(pages) {
+  const el = document.getElementById("pagination");
+  if (pages <= 1) { el.innerHTML = ""; return; }
+
+  let html = `<button class="page-btn" id="prev" ${currentPage===1?"disabled":""}>&#8249;</button>`;
+  for (let i=1; i<=pages; i++) {
+    html += `<button class="page-btn ${i===currentPage?"active":""}" data-p="${i}">${i}</button>`;
+  }
+  html += `<button class="page-btn" id="next" ${currentPage===pages?"disabled":""}>&#8250;</button>`;
+  el.innerHTML = html;
+
+  el.querySelector("#prev")?.addEventListener("click", ()=>{ currentPage--; renderGrid(); window.scrollTo(0,0); });
+  el.querySelector("#next")?.addEventListener("click", ()=>{ currentPage++; renderGrid(); window.scrollTo(0,0); });
+  el.querySelectorAll("[data-p]").forEach(btn => {
+    btn.addEventListener("click", ()=>{ currentPage=+btn.dataset.p; renderGrid(); window.scrollTo(0,0); });
   });
 }
 
-// ── Modal ──────────────────────────────────────────────────────────────
+// ── Modal ─────────────────────────────────────────────────────────────
 function openModal(p) {
-  document.getElementById("m-photo").innerHTML =
-    photoImg(p.photo, "modal-photo", "modal-photo-placeholder", p.name);
-  document.getElementById("m-name").textContent   = p.name;
-  document.getElementById("m-email").textContent  = p.email;
-  document.getElementById("m-flag").textContent   = flagEmoji(p.countries || p.country);
-  document.getElementById("m-country").textContent = (p.countries || p.country || "").toUpperCase();
-  document.getElementById("m-cohort").innerHTML   =
-    `${p.year} <span class="winner-label">WINNER</span>`;
-  document.getElementById("m-bio").textContent    = p.bio || "";
-  document.getElementById("m-represented").innerHTML =
-    p.countries ? `<strong>Countries Represented:</strong> <span class="link">${p.countries}</span>` : "";
-  document.getElementById("m-home").innerHTML     =
-    p.country ? `<strong>Home Country:</strong> <span class="link">${p.country}</span>` : "";
-  document.getElementById("m-linkedin").innerHTML =
-    p.linkedin ? `<strong>LinkedIn:</strong> <a href="${p.linkedin}" target="_blank">${p.linkedin}</a>` : "";
+  document.getElementById("m-photo").innerHTML = photoImg(p.photo,"modal-photo","modal-photo-placeholder",p.name);
+  document.getElementById("m-name").textContent  = p.name;
+  document.getElementById("m-email").textContent = p.email;
+  document.getElementById("m-flag").textContent  = flagEmoji(p.countries||p.country);
+  document.getElementById("m-country").textContent = (p.countries||p.country||"").toUpperCase();
+  document.getElementById("m-cohort").innerHTML  = `${p.year} <span class="winner-label">WINNER</span>`;
+  document.getElementById("m-bio").textContent   = p.bio||"";
+  document.getElementById("m-represented").innerHTML = p.countries ? `<strong>Countries Represented:</strong> ${p.countries}` : "";
+  document.getElementById("m-home").innerHTML    = p.country ? `<strong>Home Country:</strong> ${p.country}` : "";
+  document.getElementById("m-linkedin").innerHTML= p.linkedin ? `<strong>LinkedIn:</strong> <a href="${p.linkedin}" target="_blank">${p.linkedin}</a>` : "";
   document.getElementById("overlay").classList.add("open");
   document.body.style.overflow = "hidden";
 }
@@ -384,15 +449,9 @@ function closeModal() {
 }
 
 document.getElementById("closeBtn").addEventListener("click", closeModal);
-document.getElementById("overlay").addEventListener("click", e => {
-  if (e.target === document.getElementById("overlay")) closeModal();
-});
-document.addEventListener("keydown", e => e.key === "Escape" && closeModal());
-
-// ── Event listeners ───────────────────────────────────────────────────
-["search","f-year","f-country","f-location"].forEach(id =>
-  document.getElementById(id).addEventListener("input", applyFilters)
-);
+document.getElementById("overlay").addEventListener("click", e=>{ if(e.target===document.getElementById("overlay")) closeModal(); });
+document.addEventListener("keydown", e=>e.key==="Escape"&&closeModal());
+["search","f-year","f-country","f-location"].forEach(id=>document.getElementById(id).addEventListener("input",applyFilters));
 
 // ── Init ──────────────────────────────────────────────────────────────
 async function init() {
@@ -400,13 +459,12 @@ async function init() {
     const res = await fetch(API_URL);
     const data = await res.json();
     if (data.error) throw new Error(data.error);
-    allPeople = data.records.filter(p => p.name);
+    allPeople = data.records.filter(p=>p.name);
     filtered = [...allPeople];
     buildFilters(allPeople);
     renderGrid();
   } catch(e) {
-    document.getElementById("grid").innerHTML =
-      `<div class="status">❌ Could not load directory. Error: ${e.message}</div>`;
+    document.getElementById("grid").innerHTML = `<div class="status">❌ Could not load directory. Error: ${e.message}</div>`;
   }
 }
 
