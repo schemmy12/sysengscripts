@@ -256,15 +256,19 @@ const PAGE_SIZE = 20;
   <div class="filter-row">
     <div class="filter-wrap">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
-      <select id="f-year"><option value="">All Cohorts</option></select>
+      <select id="f-university"><option value="">University</option></select>
     </div>
     <div class="filter-wrap">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 010 20M12 2a15.3 15.3 0 000 20"/></svg>
-      <select id="f-country"><option value="">All Countries</option></select>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
+      <select id="f-interests"><option value="">Areas of Interest</option></select>
     </div>
     <div class="filter-wrap">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
-      <select id="f-location"><option value="">All Locations</option></select>
+      <select id="f-location"><option value="">Current Location</option></select>
+    </div>
+    <div class="filter-wrap">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 010 20M12 2a15.3 15.3 0 000 20"/></svg>
+      <select id="f-country"><option value="">Countries Represented</option></select>
     </div>
   </div>
 </div>
@@ -369,22 +373,26 @@ function populateFilter(id, values) {
 }
 
 function buildFilters(people) {
-  populateFilter("f-year",     people.map(p=>p.year));
-  populateFilter("f-country",  people.map(p=>p.countries||p.country));
-  populateFilter("f-location", people.map(p=>p.country));
+  populateFilter("f-university", people.map(p=>p.university));
+  populateFilter("f-interests",  people.map(p=>p.interests));
+  populateFilter("f-location",   people.map(p=>p.country));
+  populateFilter("f-country",    people.map(p=>p.countries));
 }
 
 function applyFilters() {
   const q   = document.getElementById("search").value.toLowerCase();
-  const yr  = document.getElementById("f-year").value;
-  const cty = document.getElementById("f-country").value;
+  const uni = document.getElementById("f-university").value;
+  const int = document.getElementById("f-interests").value;
   const loc = document.getElementById("f-location").value;
+  const cty = document.getElementById("f-country").value;
+
   filtered = allPeople.filter(p => {
-    const mQ  = !q  || [p.name,p.year,p.bio,p.country,p.city,p.countries].some(v=>(v||"").toLowerCase().includes(q));
-    const mYr = !yr  || p.year === yr;
-    const mC  = !cty || p.countries === cty || p.country === cty;
-    const mL  = !loc || p.country === loc;
-    return mQ && mYr && mC && mL;
+    const mQ   = !q   || [p.name,p.year,p.bio,p.country,p.city,p.countries,p.university,p.interests].some(v=>(v||"").toLowerCase().includes(q));
+    const mUni = !uni || p.university === uni;
+    const mInt = !int || (p.interests||"").includes(int);
+    const mLoc = !loc || p.country === loc;
+    const mCty = !cty || p.countries === cty;
+    return mQ && mUni && mInt && mLoc && mCty;
   });
   currentPage = 1;
   renderGrid();
@@ -475,7 +483,7 @@ function closeModal() {
 document.getElementById("closeBtn").addEventListener("click", closeModal);
 document.getElementById("overlay").addEventListener("click", e=>{ if(e.target===document.getElementById("overlay")) closeModal(); });
 document.addEventListener("keydown", e=>e.key==="Escape"&&closeModal());
-["search","f-year","f-country","f-location"].forEach(id=>document.getElementById(id).addEventListener("input",applyFilters));
+["search","f-university","f-interests","f-location","f-country"].forEach(id=>document.getElementById(id).addEventListener("input",applyFilters));
 
 // ── Init ──────────────────────────────────────────────────────────────
 async function init() {
