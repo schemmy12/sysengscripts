@@ -111,7 +111,7 @@
     filter: drop-shadow(0 1px 3px rgba(0,0,0,.4));
   }
 
-  .card-body { 
+  .card-body {
     flex: 1; min-width: 0;
     padding-top: 4px;
   }
@@ -251,16 +251,12 @@ const PAGE_SIZE = 20;
 <div class="toolbar">
   <div class="search-row">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-    <input id="search" type="text" placeholder="Search by Name & University & Areas of Interest & Current Location & Countries Represented">
+    <input id="search" type="text" placeholder="Search by Name, Cohort Year, Current Location, Countries Represented…">
   </div>
   <div class="filter-row">
     <div class="filter-wrap">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
-      <select id="f-university"><option value="">University</option></select>
-    </div>
-    <div class="filter-wrap">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
-      <select id="f-interests"><option value="">Areas of Interest</option></select>
+      <select id="f-year"><option value="">Cohort Year</option></select>
     </div>
     <div class="filter-wrap">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
@@ -278,7 +274,7 @@ const PAGE_SIZE = 20;
   <div class="status"><div class="spinner"></div>Loading directory…</div>
 </div>
 <div class="pagination" id="pagination"></div>
-</div><!-- end container -->
+</div>
 
 <!-- Modal -->
 <div class="overlay" id="overlay">
@@ -301,13 +297,13 @@ const PAGE_SIZE = 20;
       <div class="modal-bio" id="m-bio"></div>
       <div class="modal-field" id="m-represented"></div>
       <div class="modal-field" id="m-home"></div>
+      <div class="modal-field" id="m-pronouns"></div>
       <div class="modal-field" id="m-linkedin"></div>
     </div>
   </div>
 </div>
 
 <script>
-// ── Country → flag ────────────────────────────────────────────────────
 const countryToCode = {
   "afghanistan":"AF","albania":"AL","algeria":"DZ","angola":"AO","argentina":"AR",
   "armenia":"AM","australia":"AU","austria":"AT","azerbaijan":"AZ","bahrain":"BH",
@@ -356,14 +352,12 @@ function photoImg(url, cls, phCls, name) {
   return `<div class="${phCls}">${initials(name)}</div>`;
 }
 
-// ── State ─────────────────────────────────────────────────────────────
 let allPeople = [], filtered = [], currentPage = 1;
 
-// ── Filters ───────────────────────────────────────────────────────────
 function populateFilter(id, values) {
   const sel = document.getElementById(id);
   const cur = sel.value;
-  [...sel.options].slice(1).forEach(o=>o.remove());
+  [...sel.options].slice(1).forEach(o => o.remove());
   [...new Set(values.filter(Boolean).sort())].forEach(v => {
     const o = document.createElement("option");
     o.value = o.textContent = v;
@@ -373,32 +367,28 @@ function populateFilter(id, values) {
 }
 
 function buildFilters(people) {
-  populateFilter("f-university", people.map(p=>p.university));
-  populateFilter("f-interests",  people.map(p=>p.interests));
-  populateFilter("f-location",   people.map(p=>p.country));
-  populateFilter("f-country",    people.map(p=>p.countries));
+  populateFilter("f-location", people.map(p => p.country));
+  populateFilter("f-country",  people.map(p => p.countries));
+  populateFilter("f-year",     people.map(p => String(p.year)));
 }
 
 function applyFilters() {
   const q   = document.getElementById("search").value.toLowerCase();
-  const uni = document.getElementById("f-university").value;
-  const int = document.getElementById("f-interests").value;
   const loc = document.getElementById("f-location").value;
   const cty = document.getElementById("f-country").value;
+  const yr  = document.getElementById("f-year").value;
 
   filtered = allPeople.filter(p => {
-    const mQ   = !q   || [p.name,p.year,p.bio,p.country,p.city,p.countries,p.university,p.interests].some(v=>(v||"").toLowerCase().includes(q));
-    const mUni = !uni || p.university === uni;
-    const mInt = !int || (p.interests||"").includes(int);
+    const mQ   = !q   || [p.name, p.bio, p.country, p.city, p.countries, String(p.year)].some(v => (v||"").toLowerCase().includes(q));
     const mLoc = !loc || p.country === loc;
     const mCty = !cty || p.countries === cty;
-    return mQ && mUni && mInt && mLoc && mCty;
+    const mYr  = !yr  || String(p.year) === yr;
+    return mQ && mLoc && mCty && mYr;
   });
   currentPage = 1;
   renderGrid();
 }
 
-// ── Render ────────────────────────────────────────────────────────────
 function renderGrid() {
   const total = filtered.length;
   const pages = Math.ceil(total / PAGE_SIZE);
@@ -415,10 +405,10 @@ function renderGrid() {
     return;
   }
 
-  grid.innerHTML = slice.map((p,i) => `
+  grid.innerHTML = slice.map((p, i) => `
     <div class="card" data-i="${start+i}" tabindex="0">
       <div class="card-photo-wrap">
-        ${photoImg(p.photo,"card-img","card-img-placeholder",p.name)}
+        ${photoImg(p.photo, "card-img", "card-img-placeholder", p.name)}
         <span class="card-flag">${flagEmoji(p.countries||p.country)}</span>
       </div>
       <div class="card-body">
@@ -434,8 +424,8 @@ function renderGrid() {
   `).join("");
 
   grid.querySelectorAll(".card").forEach(el => {
-    el.addEventListener("click", ()=>openModal(filtered[+el.dataset.i]));
-    el.addEventListener("keydown", e=>e.key==="Enter"&&openModal(filtered[+el.dataset.i]));
+    el.addEventListener("click", () => openModal(filtered[+el.dataset.i]));
+    el.addEventListener("keydown", e => e.key === "Enter" && openModal(filtered[+el.dataset.i]));
   });
 
   renderPagination(pages);
@@ -444,33 +434,30 @@ function renderGrid() {
 function renderPagination(pages) {
   const el = document.getElementById("pagination");
   if (pages <= 1) { el.innerHTML = ""; return; }
-
   let html = `<button class="page-btn" id="prev" ${currentPage===1?"disabled":""}>&#8249;</button>`;
-  for (let i=1; i<=pages; i++) {
+  for (let i = 1; i <= pages; i++)
     html += `<button class="page-btn ${i===currentPage?"active":""}" data-p="${i}">${i}</button>`;
-  }
   html += `<button class="page-btn" id="next" ${currentPage===pages?"disabled":""}>&#8250;</button>`;
   el.innerHTML = html;
-
-  el.querySelector("#prev")?.addEventListener("click", ()=>{ currentPage--; renderGrid(); window.scrollTo(0,0); });
-  el.querySelector("#next")?.addEventListener("click", ()=>{ currentPage++; renderGrid(); window.scrollTo(0,0); });
-  el.querySelectorAll("[data-p]").forEach(btn => {
-    btn.addEventListener("click", ()=>{ currentPage=+btn.dataset.p; renderGrid(); window.scrollTo(0,0); });
-  });
+  el.querySelector("#prev")?.addEventListener("click", () => { currentPage--; renderGrid(); window.scrollTo(0,0); });
+  el.querySelector("#next")?.addEventListener("click", () => { currentPage++; renderGrid(); window.scrollTo(0,0); });
+  el.querySelectorAll("[data-p]").forEach(btn =>
+    btn.addEventListener("click", () => { currentPage = +btn.dataset.p; renderGrid(); window.scrollTo(0,0); })
+  );
 }
 
-// ── Modal ─────────────────────────────────────────────────────────────
 function openModal(p) {
-  document.getElementById("m-photo").innerHTML = photoImg(p.photo,"modal-photo","modal-photo-placeholder",p.name);
-  document.getElementById("m-name").textContent  = p.name;
-  document.getElementById("m-email").textContent = p.email;
-  document.getElementById("m-flag").textContent  = flagEmoji(p.countries||p.country);
+  document.getElementById("m-photo").innerHTML    = photoImg(p.photo, "modal-photo", "modal-photo-placeholder", p.name);
+  document.getElementById("m-name").textContent   = p.name;
+  document.getElementById("m-email").textContent  = p.email;
+  document.getElementById("m-flag").textContent   = flagEmoji(p.countries||p.country);
   document.getElementById("m-country").textContent = (p.countries||p.country||"").toUpperCase();
-  document.getElementById("m-cohort").innerHTML  = `${p.year} <span class="winner-label">WINNER</span>`;
-  document.getElementById("m-bio").textContent   = p.bio||"";
+  document.getElementById("m-cohort").innerHTML   = `${p.year} <span class="winner-label">RISE FELLOW</span>`;
+  document.getElementById("m-bio").textContent    = p.bio||"";
   document.getElementById("m-represented").innerHTML = p.countries ? `<strong>Countries Represented:</strong> ${p.countries}` : "";
-  document.getElementById("m-home").innerHTML    = p.country ? `<strong>Home Country:</strong> ${p.country}` : "";
-  document.getElementById("m-linkedin").innerHTML= p.linkedin ? `<strong>LinkedIn:</strong> <a href="${p.linkedin}" target="_blank">${p.linkedin}</a>` : "";
+  document.getElementById("m-home").innerHTML     = p.country ? `<strong>Current Location:</strong> ${[p.city, p.country].filter(Boolean).join(", ")}` : "";
+  document.getElementById("m-pronouns").innerHTML = p.pronouns ? `<strong>Pronouns:</strong> ${p.pronouns}` : "";
+  document.getElementById("m-linkedin").innerHTML = p.linkedin ? `<strong>LinkedIn:</strong> <a href="${p.linkedin}" target="_blank" rel="noopener">${p.linkedin}</a>` : "";
   document.getElementById("overlay").classList.add("open");
   document.body.style.overflow = "hidden";
 }
@@ -481,18 +468,19 @@ function closeModal() {
 }
 
 document.getElementById("closeBtn").addEventListener("click", closeModal);
-document.getElementById("overlay").addEventListener("click", e=>{ if(e.target===document.getElementById("overlay")) closeModal(); });
-document.addEventListener("keydown", e=>e.key==="Escape"&&closeModal());
-["search","f-university","f-interests","f-location","f-country"].forEach(id=>document.getElementById(id).addEventListener("input",applyFilters));
+document.getElementById("overlay").addEventListener("click", e => { if (e.target === document.getElementById("overlay")) closeModal(); });
+document.addEventListener("keydown", e => e.key === "Escape" && closeModal());
+["search","f-location","f-country","f-year"].forEach(id =>
+  document.getElementById(id).addEventListener("input", applyFilters)
+);
 
-// ── Init ──────────────────────────────────────────────────────────────
 async function init() {
   try {
-    const res = await fetch(API_URL);
+    const res  = await fetch(API_URL);
     const data = await res.json();
     if (data.error) throw new Error(data.error);
-    allPeople = data.records.filter(p=>p.name);
-    filtered = [...allPeople];
+    allPeople = data.records.filter(p => p.name);
+    filtered  = [...allPeople];
     buildFilters(allPeople);
     renderGrid();
   } catch(e) {
