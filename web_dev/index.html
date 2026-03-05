@@ -3,10 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Rise Fellows Directory</title>
+<title>Rise Connect</title>
 <style>
   :root {
     --navy: #1a2744;
+    --navy-dark: #111c35;
     --teal: #0099a8;
     --gold: #f5a623;
     --light-bg: #f7f8fa;
@@ -14,40 +15,75 @@
     --text: #333;
     --muted: #666;
   }
-
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: Arial, sans-serif; background: #f0f2f5; color: var(--text); }
 
-  .container {
-    max-width: 1000px;
-    margin: 0 auto;
-    background: #fff;
-    box-shadow: 0 2px 12px rgba(0,0,0,.08);
+  /* ── Hero ── */
+  .hero {
+    background: linear-gradient(135deg, #1a2744 60%, #1e3a6e 100%);
+    position: relative; overflow: hidden;
+  }
+  .hero::before {
+    content: ""; position: absolute; inset: 0;
+    background: repeating-linear-gradient(45deg, transparent, transparent 40px, rgba(255,255,255,.015) 40px, rgba(255,255,255,.015) 80px);
   }
 
-  /* ── Toolbar ── */
+  /* Table-based nav — most bulletproof centering available */
+  .hero-nav {
+    display: table; width: 100%; table-layout: fixed;
+    border-bottom: 1px solid rgba(255,255,255,.08);
+    position: relative; z-index: 1;
+  }
+  .hero-nav-left   { display: table-cell; width: 25%; vertical-align: middle; padding: 16px 24px; text-align: left; }
+  .hero-nav-center { display: table-cell; width: 50%; vertical-align: middle; padding: 16px 0;   text-align: center; }
+  .hero-nav-right  { display: table-cell; width: 25%; vertical-align: middle; padding: 16px 24px; text-align: right; }
+
+  .hero-logo { display: inline-flex; align-items: center; text-decoration: none; }
+  .logo-icon { width: 100px; height: 52px; flex-shrink: 0; }
+  .logo-icon svg { width: 100%; height: 100%; }
+
+  .hero-nav-center a {
+    display: inline-block; margin: 0 12px;
+    color: rgba(255,255,255,.85); font-size: 13px; font-weight: 500;
+    text-decoration: none; white-space: nowrap; transition: color .15s;
+  }
+  .hero-nav-center a:hover { color: #fff; }
+
+  .hero-cta {
+    display: inline-block; background: var(--gold); color: var(--navy-dark);
+    font-size: 11px; font-weight: 700; letter-spacing: 1px;
+    text-transform: uppercase; text-decoration: none;
+    padding: 9px 16px; border-radius: 4px; white-space: nowrap;
+  }
+  .hero-cta:hover { background: #e8961a; }
+
+  .hero-body { padding: 28px 40px 36px; position: relative; z-index: 1; }
+  .hero-title {
+    font-size: 48px; font-weight: 800; color: var(--gold);
+    line-height: 1.1; font-style: italic; letter-spacing: -.5px;
+  }
+
+  /* ── Directory ── */
+  .container { max-width: 1100px; margin: 0 auto; padding: 0 20px 40px; }
+
   .toolbar {
-    background: #fff;
-    padding: 20px 24px 16px;
-    border-bottom: 1px solid var(--border);
+    background: #fff; padding: 20px 0 16px;
     position: sticky; top: 0; z-index: 100;
+    border-bottom: 1px solid var(--border);
+    margin: 0 -20px; padding-left: 20px; padding-right: 20px;
   }
-
   .search-row {
     display: flex; align-items: center; gap: 10px;
-    border: 1.5px solid var(--navy); border-radius: 6px;
+    border: 1.5px solid var(--navy); border-radius: 8px;
     padding: 11px 16px; margin-bottom: 12px; background: #fff;
   }
-  .search-row input {
-    flex: 1; border: none; outline: none;
-    font-size: 14px; color: var(--text);
-  }
+  .search-row input { flex: 1; border: none; outline: none; font-size: 14px; color: var(--text); }
   .search-row svg { color: var(--navy); flex-shrink: 0; }
 
   .filter-row { display: flex; gap: 10px; flex-wrap: wrap; }
   .filter-wrap {
     display: flex; align-items: center; gap: 6px;
-    border: 1.5px solid var(--border); border-radius: 6px;
+    border: 1.5px solid var(--border); border-radius: 8px;
     padding: 8px 12px; background: #fff; flex: 1; min-width: 140px;
     transition: border-color .15s;
   }
@@ -56,104 +92,54 @@
   .filter-wrap select {
     border: none; outline: none; font-size: 13px;
     color: var(--text); background: transparent;
-    cursor: pointer; flex: 1; appearance: none;
-    font-weight: 500;
+    cursor: pointer; flex: 1; appearance: none; font-weight: 500;
   }
 
-  /* ── Meta ── */
-  .meta { padding: 10px 16px; font-size: 13px; color: var(--muted); }
+  .meta { padding: 14px 0 8px; font-size: 13px; color: var(--muted); }
 
-  /* ── Grid ── */
-  .grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 1px;
-    background: var(--border);
-    border-top: 1px solid var(--border);
-  }
+  .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
 
-  /* ── Card ── */
   .card {
-    background: #fff;
-    display: flex;
-    flex-direction: row;
-    cursor: pointer;
-    transition: background .15s;
-    padding: 20px 24px;
-    gap: 18px;
-    align-items: flex-start;
-    min-height: 140px;
+    background: #fff; display: flex; flex-direction: row;
+    cursor: pointer; padding: 20px 24px; gap: 18px;
+    align-items: flex-start; min-height: 140px;
+    border-radius: 10px; border: 1px solid var(--border);
+    box-shadow: 0 1px 4px rgba(0,0,0,.05);
+    transition: box-shadow .15s, transform .15s;
   }
-  .card:hover { background: #f9fafb; }
+  .card:hover { box-shadow: 0 4px 16px rgba(0,0,0,.1); transform: translateY(-1px); }
 
-  .card-photo-wrap {
-    position: relative;
-    flex-shrink: 0;
-    width: 120px;
-    height: 130px;
-  }
-  .card-img {
-    width: 100%; height: 100%;
-    object-fit: cover; object-position: top;
-    display: block;
-  }
+  .card-photo-wrap { position: relative; flex-shrink: 0; width: 110px; height: 120px; }
+  .card-img { width: 100%; height: 100%; object-fit: cover; object-position: top; display: block; border-radius: 6px; }
   .card-img-placeholder {
-    width: 100%; height: 100%;
-    background: var(--navy);
+    width: 100%; height: 100%; background: var(--navy); border-radius: 6px;
     display: flex; align-items: center; justify-content: center;
-    font-size: 32px; font-weight: 700; color: #fff;
+    font-size: 30px; font-weight: 700; color: #fff;
   }
-  .card-flag {
-    position: absolute;
-    top: 5px; right: 5px;
-    font-size: 18px;
-    line-height: 1;
-    filter: drop-shadow(0 1px 3px rgba(0,0,0,.4));
-  }
+  .card-flag { position: absolute; top: 5px; right: 5px; font-size: 17px; line-height: 1; filter: drop-shadow(0 1px 3px rgba(0,0,0,.4)); }
 
-  .card-body { 
-    flex: 1; min-width: 0;
-    padding-top: 4px;
-  }
-  .card-country-code {
-    font-size: 11px; font-weight: 600;
-    color: var(--muted); letter-spacing: .5px;
-    margin-bottom: 4px;
-    text-transform: uppercase;
-  }
-  .card-name {
-    font-size: 16px; font-weight: 700;
-    color: var(--navy); margin-bottom: 5px;
-    line-height: 1.3;
-  }
-  .card-cohort {
-    font-size: 13px; color: var(--muted); margin-bottom: 12px;
-  }
+  .card-body { flex: 1; min-width: 0; padding-top: 4px; }
+  .card-country-code { font-size: 11px; font-weight: 700; color: var(--muted); letter-spacing: .8px; margin-bottom: 4px; text-transform: uppercase; }
+  .card-name { font-size: 15px; font-weight: 700; color: var(--navy); margin-bottom: 5px; line-height: 1.3; }
+  .card-cohort { font-size: 13px; color: var(--muted); margin-bottom: 12px; }
   .card-cohort span { color: var(--teal); font-weight: 600; }
-  .card-email {
-    display: flex; align-items: center; gap: 7px;
-    font-size: 13px; color: var(--text);
-  }
+  .card-email { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--text); min-width: 0; }
+  .card-email span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
   .email-icon {
-    width: 22px; height: 22px; border-radius: 3px;
-    background: var(--gold);
-    display: flex; align-items: center; justify-content: center;
-    flex-shrink: 0;
+    width: 22px; height: 22px; border-radius: 4px; background: var(--gold);
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
   }
   .email-icon svg { color: #fff; }
 
-  /* ── Pagination ── */
   .pagination {
     display: flex; justify-content: center; align-items: center;
-    gap: 4px; padding: 20px 16px;
-    border-top: 1px solid var(--border);
+    gap: 4px; padding: 24px 0 8px;
   }
   .page-btn {
-    width: 32px; height: 32px; border-radius: 4px;
+    width: 32px; height: 32px; border-radius: 6px;
     border: 1px solid var(--border); background: #fff;
     font-size: 13px; cursor: pointer; color: var(--text);
-    display: flex; align-items: center; justify-content: center;
-    transition: all .15s;
+    display: flex; align-items: center; justify-content: center; transition: all .15s;
   }
   .page-btn:hover { background: var(--light-bg); }
   .page-btn.active { background: var(--navy); color: #fff; border-color: var(--navy); }
@@ -166,65 +152,45 @@
     align-items: center; justify-content: center; padding: 20px;
   }
   .overlay.open { display: flex; }
-
   .modal {
-    background: #fff; border-radius: 6px;
-    max-width: 720px; width: 100%;
-    max-height: 90vh; overflow-y: auto;
-    position: relative; display: flex; flex-wrap: wrap;
+    background: #fff; border-radius: 12px; max-width: 720px; width: 100%;
+    max-height: 90vh; overflow-y: auto; position: relative;
+    display: flex; flex-wrap: wrap;
+    box-shadow: 0 20px 60px rgba(0,0,0,.25);
   }
-
   .modal-left {
-    width: 220px; flex-shrink: 0;
-    padding: 24px 20px 24px 24px;
+    width: 220px; flex-shrink: 0; padding: 28px 20px 28px 28px;
+    overflow: hidden; word-break: break-all;
   }
-  .modal-photo {
-    width: 180px; height: 200px;
-    object-fit: cover; object-position: top;
-    border-radius: 3px; margin-bottom: 14px;
-  }
+  .modal-photo { width: 180px; height: 200px; object-fit: cover; object-position: top; border-radius: 8px; margin-bottom: 14px; }
   .modal-photo-placeholder {
-    width: 180px; height: 200px;
-    border-radius: 3px; margin-bottom: 14px;
-    background: var(--navy);
-    display: flex; align-items: center; justify-content: center;
+    width: 180px; height: 200px; border-radius: 8px; margin-bottom: 14px;
+    background: var(--navy); display: flex; align-items: center; justify-content: center;
     font-size: 48px; font-weight: 700; color: #fff;
   }
-  .modal-name { font-size: 17px; font-weight: 700; color: var(--navy); margin-bottom: 6px; }
-  .modal-email-row {
-    display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text);
-  }
-
-  .modal-right {
-    flex: 1; min-width: 260px;
-    padding: 24px 28px 24px 12px;
-    border-left: 1px solid var(--border);
-  }
-  .modal-country-row {
-    display: flex; align-items: center; gap: 8px;
-    margin-bottom: 10px; font-size: 14px; font-weight: 700;
-    color: var(--muted); letter-spacing: .5px;
-  }
+  .modal-name { font-size: 17px; font-weight: 700; color: var(--navy); margin-bottom: 8px; }
+  .modal-email-row { display: flex; align-items: flex-start; gap: 6px; font-size: 13px; color: var(--text); word-break: break-all; }
+  .modal-right { flex: 1; min-width: 260px; padding: 28px 28px 28px 20px; border-left: 1px solid var(--border); }
+  .modal-country-row { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; font-size: 13px; font-weight: 700; color: var(--muted); letter-spacing: .5px; }
   .modal-flag { font-size: 22px; }
-  .modal-cohort {
-    font-size: 15px; font-weight: 700; margin-bottom: 14px;
-    color: var(--navy);
+  .modal-cohort { font-size: 15px; font-weight: 700; margin-bottom: 14px; color: var(--navy); }
+  .modal-cohort .fellow-label {
+    background: var(--gold); color: var(--navy); font-size: 11px; font-weight: 700;
+    letter-spacing: .5px; padding: 2px 8px; border-radius: 4px;
+    margin-left: 8px; vertical-align: middle; text-transform: uppercase;
   }
-  .modal-cohort .winner-label { color: var(--gold); margin-left: 6px; font-weight: 700; }
   .modal-bio { font-size: 13px; line-height: 1.7; color: var(--text); margin-bottom: 16px; }
   .modal-field { font-size: 13px; margin-bottom: 8px; color: var(--text); }
   .modal-field strong { color: var(--navy); }
   .modal-field a { color: var(--teal); text-decoration: none; }
   .modal-field a:hover { text-decoration: underline; }
-
   .close-btn {
-    position: absolute; top: 12px; right: 14px;
+    position: absolute; top: 14px; right: 16px;
     background: none; border: none; font-size: 20px;
     cursor: pointer; color: var(--muted); line-height: 1;
   }
   .close-btn:hover { color: #000; }
 
-  /* ── Status ── */
   .status { text-align: center; padding: 60px 20px; color: var(--muted); grid-column: 1/-1; }
   .spinner {
     width: 32px; height: 32px; border: 3px solid var(--border);
@@ -233,8 +199,11 @@
   }
   @keyframes spin { to { transform: rotate(360deg); } }
 
-  @media (max-width: 600px) {
+  @media (max-width: 640px) {
     .grid { grid-template-columns: 1fr; }
+    .hero-title { font-size: 34px; }
+    .hero-nav-center { display: none; }
+    .hero-body { padding: 20px 20px 28px; }
     .modal-left { width: 100%; padding-bottom: 0; }
     .modal-right { border-left: none; border-top: 1px solid var(--border); padding: 16px 20px; }
   }
@@ -242,45 +211,84 @@
 </head>
 <body>
 
+<div class="hero">
+  <div class="hero-inner">
+    <div class="hero-nav">
+      <div class="hero-nav-left">
+        <a class="hero-logo" href="#">
+          <div class="logo-icon">
+            <svg viewBox="0 0 110 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <line x1="28" y1="2"  x2="28" y2="10" stroke="#f5a623" stroke-width="3" stroke-linecap="round"/>
+              <line x1="28" y1="54" x2="28" y2="62" stroke="#f5a623" stroke-width="3" stroke-linecap="round"/>
+              <line x1="2"  y1="32" x2="10" y2="32" stroke="#f5a623" stroke-width="3" stroke-linecap="round"/>
+              <line x1="46" y1="32" x2="54" y2="32" stroke="#f5a623" stroke-width="3" stroke-linecap="round"/>
+              <line x1="8"  y1="12" x2="14" y2="18" stroke="#f5a623" stroke-width="2.5" stroke-linecap="round"/>
+              <line x1="48" y1="12" x2="42" y2="18" stroke="#f5a623" stroke-width="2.5" stroke-linecap="round"/>
+              <line x1="8"  y1="52" x2="14" y2="46" stroke="#f5a623" stroke-width="2.5" stroke-linecap="round"/>
+              <line x1="48" y1="52" x2="42" y2="46" stroke="#f5a623" stroke-width="2.5" stroke-linecap="round"/>
+              <line x1="28" y1="2" x2="28" y2="8" stroke="#f5a623" stroke-width="2" stroke-linecap="round" transform="rotate(22.5 28 32)"/>
+              <line x1="28" y1="2" x2="28" y2="8" stroke="#f5a623" stroke-width="2" stroke-linecap="round" transform="rotate(67.5 28 32)"/>
+              <line x1="28" y1="2" x2="28" y2="8" stroke="#f5a623" stroke-width="2" stroke-linecap="round" transform="rotate(112.5 28 32)"/>
+              <line x1="28" y1="2" x2="28" y2="8" stroke="#f5a623" stroke-width="2" stroke-linecap="round" transform="rotate(157.5 28 32)"/>
+              <line x1="28" y1="2" x2="28" y2="8" stroke="#f5a623" stroke-width="2" stroke-linecap="round" transform="rotate(202.5 28 32)"/>
+              <line x1="28" y1="2" x2="28" y2="8" stroke="#f5a623" stroke-width="2" stroke-linecap="round" transform="rotate(247.5 28 32)"/>
+              <line x1="28" y1="2" x2="28" y2="8" stroke="#f5a623" stroke-width="2" stroke-linecap="round" transform="rotate(292.5 28 32)"/>
+              <line x1="28" y1="2" x2="28" y2="8" stroke="#f5a623" stroke-width="2" stroke-linecap="round" transform="rotate(337.5 28 32)"/>
+              <text x="18" y="43" fill="white" font-size="28" font-weight="900" font-family="Arial Black, Arial" letter-spacing="1">RISE</text>
+            </svg>
+          </div>
+        </a>
+      </div>
+      <div class="hero-nav-center">
+        <a href="#">Fellow Portal</a>
+        <a href="#">Rise Fellow Handbook</a>
+        <a href="#">Rise Calendar</a>
+        <a href="#">Book a Call</a>
+      </div>
+      <div class="hero-nav-right">
+        <a class="hero-cta" href="#">✦ Update Your Information Here</a>
+      </div>
+    </div>
+    <div class="hero-body" style="padding: 36px 0 48px;">
+      <div class="hero-title" style="margin-left: 25%;">Rise Connect</div>
+    </div>
+  </div>
+</div>
+
 <script>
 const API_URL = "https://script.google.com/macros/s/AKfycbxWpy7prAGQ13eOeXIOZoUfIsZ_yynbAQar33rthMfnYs4J01fXnZknhdphSR1yMnuK/exec";
 const PAGE_SIZE = 20;
 </script>
 
 <div class="container">
-<div class="toolbar">
-  <div class="search-row">
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-    <input id="search" type="text" placeholder="Search by Name & University & Areas of Interest & Current Location & Countries Represented">
-  </div>
-  <div class="filter-row">
-    <div class="filter-wrap">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
-      <select id="f-university"><option value="">University</option></select>
+  <div class="toolbar">
+    <div class="search-row">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+      <input id="search" type="text" placeholder="Search by Name, Cohort Year, Current Location, Countries Represented…">
     </div>
-    <div class="filter-wrap">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
-      <select id="f-interests"><option value="">Areas of Interest</option></select>
-    </div>
-    <div class="filter-wrap">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
-      <select id="f-location"><option value="">Current Location</option></select>
-    </div>
-    <div class="filter-wrap">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 010 20M12 2a15.3 15.3 0 000 20"/></svg>
-      <select id="f-country"><option value="">Countries Represented</option></select>
+    <div class="filter-row">
+      <div class="filter-wrap">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
+        <select id="f-year"><option value="">Cohort Year</option></select>
+      </div>
+      <div class="filter-wrap">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+        <select id="f-location"><option value="">Current Location</option></select>
+      </div>
+      <div class="filter-wrap">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 010 20M12 2a15.3 15.3 0 000 20"/></svg>
+        <select id="f-country"><option value="">Countries Represented</option></select>
+      </div>
     </div>
   </div>
+
+  <div class="meta" id="meta"></div>
+  <div class="grid" id="grid">
+    <div class="status"><div class="spinner"></div>Loading directory…</div>
+  </div>
+  <div class="pagination" id="pagination"></div>
 </div>
 
-<div class="meta" id="meta"></div>
-<div class="grid" id="grid">
-  <div class="status"><div class="spinner"></div>Loading directory…</div>
-</div>
-<div class="pagination" id="pagination"></div>
-</div><!-- end container -->
-
-<!-- Modal -->
 <div class="overlay" id="overlay">
   <div class="modal" id="modal">
     <button class="close-btn" id="closeBtn">✕</button>
@@ -293,21 +301,18 @@ const PAGE_SIZE = 20;
       </div>
     </div>
     <div class="modal-right">
-      <div class="modal-country-row">
-        <span class="modal-flag" id="m-flag"></span>
-        <span id="m-country"></span>
-      </div>
+      <div class="modal-country-row"><span class="modal-flag" id="m-flag"></span><span id="m-country"></span></div>
       <div class="modal-cohort" id="m-cohort"></div>
       <div class="modal-bio" id="m-bio"></div>
       <div class="modal-field" id="m-represented"></div>
       <div class="modal-field" id="m-home"></div>
+      <div class="modal-field" id="m-pronouns"></div>
       <div class="modal-field" id="m-linkedin"></div>
     </div>
   </div>
 </div>
 
 <script>
-// ── Country → flag ────────────────────────────────────────────────────
 const countryToCode = {
   "afghanistan":"AF","albania":"AL","algeria":"DZ","angola":"AO","argentina":"AR",
   "armenia":"AM","australia":"AU","austria":"AT","azerbaijan":"AZ","bahrain":"BH",
@@ -346,24 +351,20 @@ function flagEmoji(country) {
   if (!code) return "🌍";
   return [...code].map(c => String.fromCodePoint(0x1F1E6 - 65 + c.charCodeAt(0))).join('');
 }
-
 function initials(name) {
   return (name||"?").split(" ").filter(Boolean).map(w=>w[0]).join("").toUpperCase().slice(0,2);
 }
-
 function photoImg(url, cls, phCls, name) {
   if (url) return `<img class="${cls}" src="${url}" alt="${name}" onerror="this.outerHTML='<div class=\\'${phCls}\\'>${initials(name)}</div>'" loading="lazy">`;
   return `<div class="${phCls}">${initials(name)}</div>`;
 }
 
-// ── State ─────────────────────────────────────────────────────────────
 let allPeople = [], filtered = [], currentPage = 1;
 
-// ── Filters ───────────────────────────────────────────────────────────
 function populateFilter(id, values) {
   const sel = document.getElementById(id);
   const cur = sel.value;
-  [...sel.options].slice(1).forEach(o=>o.remove());
+  [...sel.options].slice(1).forEach(o => o.remove());
   [...new Set(values.filter(Boolean).sort())].forEach(v => {
     const o = document.createElement("option");
     o.value = o.textContent = v;
@@ -371,50 +372,40 @@ function populateFilter(id, values) {
   });
   if (cur) sel.value = cur;
 }
-
 function buildFilters(people) {
-  populateFilter("f-university", people.map(p=>p.university));
-  populateFilter("f-interests",  people.map(p=>p.interests));
-  populateFilter("f-location",   people.map(p=>p.country));
-  populateFilter("f-country",    people.map(p=>p.countries));
+  populateFilter("f-location", people.map(p => p.country));
+  populateFilter("f-country",  people.map(p => p.countries));
+  populateFilter("f-year",     people.map(p => String(p.year)));
 }
-
 function applyFilters() {
   const q   = document.getElementById("search").value.toLowerCase();
-  const uni = document.getElementById("f-university").value;
-  const int = document.getElementById("f-interests").value;
   const loc = document.getElementById("f-location").value;
   const cty = document.getElementById("f-country").value;
-
+  const yr  = document.getElementById("f-year").value;
   filtered = allPeople.filter(p => {
-    const mQ   = !q   || [p.name,p.year,p.bio,p.country,p.city,p.countries,p.university,p.interests].some(v=>(v||"").toLowerCase().includes(q));
-    const mUni = !uni || p.university === uni;
-    const mInt = !int || (p.interests||"").includes(int);
+    const mQ   = !q   || [p.name,p.bio,p.country,p.city,p.countries,String(p.year)].some(v=>(v||"").toLowerCase().includes(q));
     const mLoc = !loc || p.country === loc;
     const mCty = !cty || p.countries === cty;
-    return mQ && mUni && mInt && mLoc && mCty;
+    const mYr  = !yr  || String(p.year) === yr;
+    return mQ && mLoc && mCty && mYr;
   });
   currentPage = 1;
   renderGrid();
 }
 
-// ── Render ────────────────────────────────────────────────────────────
 function renderGrid() {
   const total = filtered.length;
   const pages = Math.ceil(total / PAGE_SIZE);
   const start = (currentPage - 1) * PAGE_SIZE;
   const slice = filtered.slice(start, start + PAGE_SIZE);
-
   document.getElementById("meta").textContent =
     total === allPeople.length ? `${allPeople.length} Fellows` : `${total} of ${allPeople.length} Fellows`;
-
   const grid = document.getElementById("grid");
   if (!slice.length) {
     grid.innerHTML = `<div class="status">No results found.</div>`;
     document.getElementById("pagination").innerHTML = "";
     return;
   }
-
   grid.innerHTML = slice.map((p,i) => `
     <div class="card" data-i="${start+i}" tabindex="0">
       <div class="card-photo-wrap">
@@ -425,81 +416,67 @@ function renderGrid() {
         <div class="card-country-code">${countryToCode[(p.countries||p.country||"").split(",")[0].toLowerCase().trim()]||""}</div>
         <div class="card-name">${p.name}</div>
         <div class="card-cohort">Cohort: <span>${p.year}</span></div>
-        ${p.email ? `<div class="card-email">
-          <div class="email-icon"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg></div>
-          <span>${p.email}</span>
-        </div>` : ""}
+        ${p.email?`<div class="card-email"><div class="email-icon"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg></div><span>${p.email}</span></div>`:""}
       </div>
     </div>
   `).join("");
-
   grid.querySelectorAll(".card").forEach(el => {
     el.addEventListener("click", ()=>openModal(filtered[+el.dataset.i]));
     el.addEventListener("keydown", e=>e.key==="Enter"&&openModal(filtered[+el.dataset.i]));
   });
-
   renderPagination(pages);
 }
 
 function renderPagination(pages) {
   const el = document.getElementById("pagination");
   if (pages <= 1) { el.innerHTML = ""; return; }
-
   let html = `<button class="page-btn" id="prev" ${currentPage===1?"disabled":""}>&#8249;</button>`;
-  for (let i=1; i<=pages; i++) {
-    html += `<button class="page-btn ${i===currentPage?"active":""}" data-p="${i}">${i}</button>`;
-  }
+  for (let i=1;i<=pages;i++) html+=`<button class="page-btn ${i===currentPage?"active":""}" data-p="${i}">${i}</button>`;
   html += `<button class="page-btn" id="next" ${currentPage===pages?"disabled":""}>&#8250;</button>`;
   el.innerHTML = html;
-
-  el.querySelector("#prev")?.addEventListener("click", ()=>{ currentPage--; renderGrid(); window.scrollTo(0,0); });
-  el.querySelector("#next")?.addEventListener("click", ()=>{ currentPage++; renderGrid(); window.scrollTo(0,0); });
-  el.querySelectorAll("[data-p]").forEach(btn => {
-    btn.addEventListener("click", ()=>{ currentPage=+btn.dataset.p; renderGrid(); window.scrollTo(0,0); });
-  });
+  el.querySelector("#prev")?.addEventListener("click",()=>{currentPage--;renderGrid();window.scrollTo(0,0);});
+  el.querySelector("#next")?.addEventListener("click",()=>{currentPage++;renderGrid();window.scrollTo(0,0);});
+  el.querySelectorAll("[data-p]").forEach(btn=>btn.addEventListener("click",()=>{currentPage=+btn.dataset.p;renderGrid();window.scrollTo(0,0);}));
 }
 
-// ── Modal ─────────────────────────────────────────────────────────────
 function openModal(p) {
-  document.getElementById("m-photo").innerHTML = photoImg(p.photo,"modal-photo","modal-photo-placeholder",p.name);
+  document.getElementById("m-photo").innerHTML   = photoImg(p.photo,"modal-photo","modal-photo-placeholder",p.name);
   document.getElementById("m-name").textContent  = p.name;
   document.getElementById("m-email").textContent = p.email;
   document.getElementById("m-flag").textContent  = flagEmoji(p.countries||p.country);
   document.getElementById("m-country").textContent = (p.countries||p.country||"").toUpperCase();
-  document.getElementById("m-cohort").innerHTML  = `${p.year} <span class="winner-label">WINNER</span>`;
+  document.getElementById("m-cohort").innerHTML  = `${p.year} <span class="fellow-label">WINNER</span>`;
   document.getElementById("m-bio").textContent   = p.bio||"";
-  document.getElementById("m-represented").innerHTML = p.countries ? `<strong>Countries Represented:</strong> ${p.countries}` : "";
-  document.getElementById("m-home").innerHTML    = p.country ? `<strong>Home Country:</strong> ${p.country}` : "";
-  document.getElementById("m-linkedin").innerHTML= p.linkedin ? `<strong>LinkedIn:</strong> <a href="${p.linkedin}" target="_blank">${p.linkedin}</a>` : "";
+  document.getElementById("m-represented").innerHTML = p.countries?`<strong>Countries Represented:</strong> ${p.countries}`:"";
+  document.getElementById("m-home").innerHTML    = p.country?`<strong>Current Location:</strong> ${[p.city,p.country].filter(Boolean).join(", ")}`:"";
+  document.getElementById("m-pronouns").innerHTML= p.pronouns?`<strong>Pronouns:</strong> ${p.pronouns}`:"";
+  document.getElementById("m-linkedin").innerHTML= p.linkedin?`<strong>LinkedIn:</strong> <a href="${p.linkedin}" target="_blank" rel="noopener">${p.linkedin}</a>`:"";
   document.getElementById("overlay").classList.add("open");
-  document.body.style.overflow = "hidden";
+  document.body.style.overflow="hidden";
 }
-
 function closeModal() {
   document.getElementById("overlay").classList.remove("open");
-  document.body.style.overflow = "";
+  document.body.style.overflow="";
 }
 
-document.getElementById("closeBtn").addEventListener("click", closeModal);
-document.getElementById("overlay").addEventListener("click", e=>{ if(e.target===document.getElementById("overlay")) closeModal(); });
-document.addEventListener("keydown", e=>e.key==="Escape"&&closeModal());
-["search","f-university","f-interests","f-location","f-country"].forEach(id=>document.getElementById(id).addEventListener("input",applyFilters));
+document.getElementById("closeBtn").addEventListener("click",closeModal);
+document.getElementById("overlay").addEventListener("click",e=>{if(e.target===document.getElementById("overlay"))closeModal();});
+document.addEventListener("keydown",e=>e.key==="Escape"&&closeModal());
+["search","f-location","f-country","f-year"].forEach(id=>document.getElementById(id).addEventListener("input",applyFilters));
 
-// ── Init ──────────────────────────────────────────────────────────────
 async function init() {
   try {
-    const res = await fetch(API_URL);
+    const res  = await fetch(API_URL);
     const data = await res.json();
     if (data.error) throw new Error(data.error);
     allPeople = data.records.filter(p=>p.name);
-    filtered = [...allPeople];
+    filtered  = [...allPeople];
     buildFilters(allPeople);
     renderGrid();
   } catch(e) {
-    document.getElementById("grid").innerHTML = `<div class="status">❌ Could not load directory. Error: ${e.message}</div>`;
+    document.getElementById("grid").innerHTML=`<div class="status">❌ Could not load directory. Error: ${e.message}</div>`;
   }
 }
-
 init();
 </script>
 </body>
