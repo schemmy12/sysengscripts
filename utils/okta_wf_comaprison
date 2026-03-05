@@ -1,0 +1,259 @@
+import { useState } from "react";
+
+const data = [
+  {
+    category: "User Account Management",
+    tasks: [
+      {
+        task: "Configure Out-of-Office (OOO) settings without direct user login",
+        status: "Partial",
+        note: "No native OOO action in Okta Workflows. Can be achieved by calling Google Workspace APIs via HTTP connector during triggered events (e.g., approved PTO from an HR system), but requires custom API configuration. Not a turnkey feature."
+      },
+      {
+        task: "Grant delegate access to Gmail accounts",
+        status: "Partial",
+        note: "No native Gmail delegation action. Okta Workflows can call the Gmail API via HTTP connector to add/remove delegates as part of a broader onboarding or role-change flow, but requires API setup and is not out-of-the-box."
+      },
+      {
+        task: "Transfer ownership / modify sharing permissions for Drive files",
+        status: "Partial",
+        note: "Not a native Okta Workflows action. Can call Google Drive API via HTTP connector to transfer ownership during offboarding flows. Best combined with a dedicated offboarding flow trigger (e.g., user deactivated in Okta)."
+      },
+      {
+        task: "Reset passwords, suspend/reactivate accounts, enforce 2FA",
+        status: "Yes",
+        note: "Core Okta Workflows strength. Can reset passwords, suspend/unsuspend accounts, force MFA re-enrollment, and clear sessions — all natively and automatically triggered by HR events, security signals, or schedules. No admin login required."
+      },
+      {
+        task: "Trigger license reassignment (Google Workspace, Slack, Zoom, etc.)",
+        status: "Yes",
+        note: "Okta Workflows has native connectors for Slack, Zoom, and others, and can manage Google Workspace licenses via the Google Workspace connector. Fully automatable on role changes, department transfers, or offboarding events."
+      }
+    ]
+  },
+  {
+    category: "Collaboration & Drive Management",
+    tasks: [
+      {
+        task: "Add/remove users from Shared Drives; manage permissions on Docs, Sheets, Slides",
+        status: "Partial",
+        note: "No native Shared Drive membership actions in Okta Workflows. Can call Google Drive API via HTTP connector to add/remove members as part of onboarding/offboarding flows. File-level permission management is outside scope without significant custom HTTP work."
+      },
+      {
+        task: "Investigate and manage Google file links (public, external, internal)",
+        status: "No",
+        note: "Outside the scope of Okta Workflows. OW is an identity and access automation platform — it has no ability to scan, inventory, or manage file link visibility within Google Drive. A CASB or Google Workspace DLP tool is required for this."
+      },
+      {
+        task: "Bulk update file sharing policies (remove external collaborators, restrict public links)",
+        status: "No",
+        note: "Not within Okta Workflows' scope. OW cannot scan Drive contents or enforce sharing policies. This requires a tool with native Drive inspection capabilities (e.g., GAM, BetterCloud, or a CASB)."
+      },
+      {
+        task: "Archive or transfer ownership of project folders during transitions",
+        status: "Partial",
+        note: "Okta Workflows can trigger a Drive ownership transfer via Google Drive API HTTP call as part of an offboarding flow when a user is deactivated. Archiving folder structures is not natively supported and would require additional scripting or a complementary tool."
+      },
+      {
+        task: "Monitor and enforce naming conventions or folder structures",
+        status: "No",
+        note: "Completely outside Okta Workflows' scope. OW has no ability to inspect or enforce Drive folder structure or naming policies. This is a Drive-native or CASB-level concern."
+      }
+    ]
+  },
+  {
+    category: "Identity & Access Control",
+    tasks: [
+      {
+        task: "Assign and manage Okta groups without logging into Okta Admin",
+        status: "Yes",
+        note: "A core native capability. Workflows can add/remove users from Okta groups automatically based on any trigger — HR profile changes, app events, scheduled checks, or API calls. Group management rules can be fully automated without any manual admin intervention."
+      },
+      {
+        task: "Manage RBAC with granular permission enforcement across SaaS apps",
+        status: "Yes",
+        note: "Strong capability. Okta Workflows can manage group membership and app role assignments across any connected SaaS app (via connectors or HTTP). Attribute-based logic (e.g., department, title, location) can drive role assignments dynamically."
+      },
+      {
+        task: "Provision/deprovision user roles based on department, seniority, or location",
+        status: "Yes",
+        note: "One of the flagship Okta Workflows use cases. Profile attributes from HR sources can trigger automatic group assignments and app provisioning. Role changes mid-lifecycle (mover flows) are handled natively with conditional logic built into flows."
+      },
+      {
+        task: "Synchronize identity across HR systems (Workday, BambooHR, etc.)",
+        status: "Yes",
+        note: "Okta has native HR integrations with Workday, BambooHR, and others as identity sources. Workflows can extend this further — reacting to HR events to trigger downstream provisioning, notifications, approvals, and cross-app updates beyond what standard SCIM handles."
+      },
+      {
+        task: "Enforce least-privilege access by monitoring permission creep",
+        status: "Partial",
+        note: "Okta Workflows can run scheduled flows to audit group memberships, flag accounts with excess entitlements, and auto-remediate by removing stale group assignments. However, it is not a continuous real-time monitoring engine — enforcement is event or schedule-driven, not always-on."
+      }
+    ]
+  },
+  {
+    category: "Governance & Security",
+    tasks: [
+      {
+        task: "Centralized visibility into all SaaS entities",
+        status: "Partial",
+        note: "Okta Workflows can aggregate data from connected apps and push it to a centralized store (e.g., a Google Sheet, Slack, or SIEM). However, OW is not a SaaS management dashboard — it lacks a native inventory UI. It's best used to feed data into a reporting or SIEM tool."
+      },
+      {
+        task: "Auditing and compliance reporting (data protection, insider threats, external sharing)",
+        status: "Partial",
+        note: "Workflows can log all provisioning and lifecycle events and route them to a SIEM (Splunk, Datadog, etc.) or collaboration tool for audit trail purposes. It cannot natively produce compliance reports or detect insider threat signals — a SIEM integration is needed to complete this use case."
+      },
+      {
+        task: "SaaS discovery / shadow IT detection",
+        status: "No",
+        note: "Outside Okta Workflows' scope. OW only knows about apps that are already connected to Okta. Discovery of unauthorized or unmanaged SaaS apps requires a dedicated SSPM or CASB tool."
+      },
+      {
+        task: "Real-time alerts (inactive users, excessive downloads, suspicious link sharing)",
+        status: "Partial",
+        note: "Okta Workflows can fire real-time alerts based on Okta system log events (failed logins, MFA challenges, suspicious activity flags, new device logins). However, it cannot monitor app-level behavior like download volume or link sharing unless that app sends a webhook to trigger a flow."
+      },
+      {
+        task: "Automate DLP rules to flag/remediate risky file activity",
+        status: "No",
+        note: "Okta Workflows has no DLP engine and cannot scan file content. It can act as a responder — if a DLP tool (e.g., Google DLP, Nightfall, Symantec) fires a webhook, OW can automate the response (e.g., suspend user, revoke access). It is a remediation tool, not a detection tool for DLP."
+      },
+      {
+        task: "Enforce region-based access / compliance frameworks (GDPR, HIPAA)",
+        status: "Partial",
+        note: "Okta Workflows can enforce access policies using user attribute data (e.g., country, location) to restrict app provisioning or group membership. For full GDPR/HIPAA enforcement (data residency, audit logging requirements), Okta's policy engine and complementary tools are needed alongside Workflows."
+      }
+    ]
+  },
+  {
+    category: "Workflow Automation",
+    tasks: [
+      {
+        task: "Automate onboarding workflows (provision accounts, assign licenses, add to groups, set up folders)",
+        status: "Yes",
+        note: "Full strength capability. Okta Workflows handles cross-SaaS onboarding natively — create accounts in connected apps, assign licenses, add to correct groups, send welcome notifications, trigger manager approvals, and set up folder access, all from a single HR trigger."
+      },
+      {
+        task: "Automate offboarding workflows (disable accounts, transfer data, revoke SaaS access)",
+        status: "Yes",
+        note: "Core Okta Workflows use case. On a termination trigger, flows can: suspend the Okta account, revoke all active sessions, remove group memberships, de-provision downstream SaaS apps, notify the manager, transfer Drive ownership via API, and log the full event — all within seconds."
+      },
+      {
+        task: "Standardize role-change workflows (permissions and licenses updated instantly)",
+        status: "Yes",
+        note: "Mover flows are a primary OW use case. When a user's profile changes in an HR source or Okta, flows can detect attribute changes and instantly update group memberships, app assignments, license tiers, and send notifications to relevant stakeholders."
+      },
+      {
+        task: "Automate notifications and approvals for IT, HR, and security teams",
+        status: "Yes",
+        note: "Okta Workflows has native Slack, email, and Teams connectors, as well as Jira and ServiceNow integrations. Full multi-step approval flows with conditional escalation logic (e.g., manager approves first, then IT) are supported natively."
+      },
+      {
+        task: "Streamline software requests with auto-approval or manager escalation",
+        status: "Yes",
+        note: "Okta Workflows can build app access request flows — a user requests access, the flow notifies the manager, captures approval via Slack or email, then auto-provisions the app in Okta upon approval. More complex ITSM-style request management is better served by a dedicated tool (ServiceNow, Jira SM), but core access request flows are well within OW's capability."
+      },
+      {
+        task: "Self-service actions for users (reset MFA, request group access) via secure workflows",
+        status: "Partial",
+        note: "Okta Workflows can power self-service actions when triggered via Okta's End-User Dashboard, a form, or an API call. MFA reset and group access request flows are common OW implementations. However, OW does not provide a native self-service portal UI — a front-end trigger (Okta dashboard, internal portal, or Slack bot) is needed to initiate the flows."
+      }
+    ]
+  }
+];
+
+const statusColor = {
+  Yes: { bg: "#c6efce", text: "#276221", border: "#82c882" },
+  Partial: { bg: "#ffeb9c", text: "#7d6608", border: "#f0c84a" },
+  No: { bg: "#ffc7ce", text: "#9c0006", border: "#f07070" }
+};
+
+export default function App() {
+  const [expanded, setExpanded] = useState({});
+
+  const toggle = (cat, i) => {
+    const k = `${cat}-${i}`;
+    setExpanded(e => ({ ...e, [k]: !e[k] }));
+  };
+
+  return (
+    <div style={{ fontFamily: "Segoe UI, Arial, sans-serif", fontSize: 13, padding: 16, background: "#f7f8fa", minHeight: "100vh" }}>
+      <div style={{ maxWidth: 1100, margin: "0 auto" }}>
+        <div style={{ marginBottom: 18 }}>
+          <h2 style={{ margin: 0, fontSize: 18, color: "#1a1a2e" }}>Okta Workflows Capability Assessment</h2>
+          <p style={{ margin: "4px 0 0", color: "#555", fontSize: 12 }}>Mapped to BetterCloud/GAM evaluation framework — Click any row to expand notes</p>
+          <div style={{ display: "flex", gap: 12, marginTop: 10 }}>
+            {Object.entries(statusColor).map(([s, c]) => (
+              <span key={s} style={{ background: c.bg, color: c.text, border: `1px solid ${c.border}`, borderRadius: 4, padding: "2px 10px", fontSize: 12, fontWeight: 600 }}>{s}</span>
+            ))}
+          </div>
+        </div>
+
+        {data.map(section => (
+          <div key={section.category} style={{ marginBottom: 20, borderRadius: 8, overflow: "hidden", boxShadow: "0 1px 4px rgba(0,0,0,0.10)" }}>
+            <div style={{ background: "#1a1a2e", color: "#fff", padding: "8px 14px", fontWeight: 700, fontSize: 13, letterSpacing: 0.3 }}>
+              {section.category}
+            </div>
+            <table style={{ width: "100%", borderCollapse: "collapse", background: "#fff" }}>
+              <thead>
+                <tr style={{ background: "#f0f1f5" }}>
+                  <th style={{ padding: "7px 14px", textAlign: "left", fontWeight: 600, color: "#333", width: "38%", borderBottom: "1px solid #ddd" }}>Task</th>
+                  <th style={{ padding: "7px 10px", textAlign: "center", fontWeight: 600, color: "#333", width: "100px", borderBottom: "1px solid #ddd" }}>OW Status</th>
+                  <th style={{ padding: "7px 14px", textAlign: "left", fontWeight: 600, color: "#333", borderBottom: "1px solid #ddd" }}>Notes</th>
+                </tr>
+              </thead>
+              <tbody>
+                {section.tasks.map((t, i) => {
+                  const k = `${section.category}-${i}`;
+                  const c = statusColor[t.status];
+                  const isOpen = expanded[k];
+                  return (
+                    <tr
+                      key={i}
+                      onClick={() => toggle(section.category, i)}
+                      style={{ borderBottom: "1px solid #eee", cursor: "pointer", background: isOpen ? "#fafbff" : "#fff", transition: "background 0.15s" }}
+                      onMouseEnter={e => e.currentTarget.style.background = "#f4f6ff"}
+                      onMouseLeave={e => e.currentTarget.style.background = isOpen ? "#fafbff" : "#fff"}
+                    >
+                      <td style={{ padding: "9px 14px", color: "#222", verticalAlign: "top", lineHeight: 1.4 }}>
+                        {t.task}
+                      </td>
+                      <td style={{ padding: "9px 10px", textAlign: "center", verticalAlign: "top" }}>
+                        <span style={{
+                          display: "inline-block",
+                          background: c.bg,
+                          color: c.text,
+                          border: `1px solid ${c.border}`,
+                          borderRadius: 4,
+                          padding: "2px 10px",
+                          fontWeight: 700,
+                          fontSize: 12,
+                          minWidth: 54
+                        }}>{t.status}</span>
+                      </td>
+                      <td style={{ padding: "9px 14px", color: isOpen ? "#222" : "#555", verticalAlign: "top", lineHeight: 1.5, fontSize: isOpen ? 13 : 12 }}>
+                        {isOpen ? t.note : t.note.slice(0, 90) + (t.note.length > 90 ? "…" : "")}
+                        <span style={{ color: "#4a6cf7", fontSize: 11, marginLeft: 4 }}>{isOpen ? "▲ less" : "▼ more"}</span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        ))}
+
+        <div style={{ background: "#fff", borderRadius: 8, padding: "12px 16px", boxShadow: "0 1px 4px rgba(0,0,0,0.08)", marginTop: 8 }}>
+          <strong style={{ color: "#1a1a2e" }}>Key Takeaway for InfoSec:</strong>
+          <p style={{ margin: "6px 0 0", color: "#444", lineHeight: 1.6, fontSize: 12 }}>
+            Okta Workflows is strongest at <strong>identity lifecycle automation, access governance, cross-SaaS provisioning, and approval flows</strong>.
+            It is not designed to replace Google Drive management, DLP, or SaaS discovery tools.
+            For tasks marked <span style={{ background: "#ffc7ce", color: "#9c0006", padding: "1px 6px", borderRadius: 3 }}>No</span>, a complementary tool (GAM, CASB, SIEM) should remain in the stack.
+            Partial capabilities can often be extended with Okta Workflows' <strong>HTTP connector</strong> and custom API calls.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
