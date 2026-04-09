@@ -73,6 +73,7 @@ body{font-family:'Poppins',sans-serif;background:var(--off-white);color:var(--te
 .warning{background:#fff3f3;border-left:4px solid #e74c3c;padding:12px 16px;border-radius:0 6px 6px 0;margin:14px 0;font-size:13px;line-height:1.7;}
 .img-ph{background:var(--light-bg);border:2px dashed var(--border);border-radius:8px;padding:20px;text-align:center;color:var(--muted);font-size:13px;margin:14px 0;}
 .embed-ph{background:#eef3ff;border:2px dashed #b3c6f0;border-radius:8px;padding:20px;text-align:center;color:var(--bright-blue);font-size:13px;margin:14px 0;}
+.table-ph{background:#f0fff4;border:2px dashed #a3d9b0;border-radius:8px;padding:20px;text-align:center;color:#2d7a4a;font-size:13px;margin:14px 0;}
 
 /* ── Home landing ── */
 .handbook-home{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;}
@@ -82,9 +83,10 @@ body{font-family:'Poppins',sans-serif;background:var(--off-white);color:var(--te
 .cat-card-title{font-size:14px;font-weight:700;color:var(--navy);margin-bottom:6px;}
 .cat-card-desc{font-size:12px;color:var(--muted);line-height:1.5;}
 
-/* ── Search highlight ── */
-mark{background:#fff3cd;border-radius:2px;padding:0 2px;}
-.search-results-info{font-size:13px;color:var(--muted);padding:10px 0 16px;}
+/* ── Loading ── */
+.hb-loading{text-align:center;padding:80px 20px;color:var(--muted);}
+.spinner{width:36px;height:36px;border:3px solid var(--border);border-top-color:var(--teal);border-radius:50%;animation:spin .7s linear infinite;margin:0 auto 16px;}
+@keyframes spin{to{transform:rotate(360deg);}}
 
 @media(max-width:768px){
   .handbook-layout{flex-direction:column;}
@@ -154,794 +156,128 @@ mark{background:#fff3cd;border-radius:2px;padding:0 2px;}
 <div class="handbook-layout">
   <aside class="sidebar" id="sidebar">
     <div class="sidebar-header">Contents</div>
-    <!-- built by JS -->
+    <div class="hb-loading"><div class="spinner"></div>Loading…</div>
   </aside>
   <main class="handbook-content" id="hb-content">
-    <!-- panels built by JS -->
+    <div class="content-panel active" id="panel-loading">
+      <div class="hb-loading"><div class="spinner"></div><p>Loading handbook…</p></div>
+    </div>
   </main>
 </div>
 
 <script>
-const CATS = [
-  {
-    id:'gs', title:'Getting Started', icon:'🏠',
-    desc:'Benefits, code of conduct, funding, and program policies.',
-    sections:[
-      { id:'s1', title:'1. Welcome & Rise Benefits', html:`
-        <p>This Handbook is your go-to-guide for Rise-related policies and guidelines as you navigate your journey with Rise.</p>
-        <p>In addition to the Rise Handbook, you also have the Fellow Portal where you can access important forms such as the Funding Request Form, University Payment Request Form, and University Application Update Form, and Rise Connect where you can search for connections across the Fellow community.</p>
-        <p>If, after reading this Handbook, you still cannot find the answer to your questions, please contact <a href="mailto:fellows@risefortheworld.org">fellows@risefortheworld.org</a>.</p>
-        <h3>Rise Fellow Benefits</h3>
-        <p>Benefits offered to Fellows may include those that appear below. Note that specific benefits will vary from year to year as new opportunities become available:</p>
-        <ul>
-          <li><strong>Residential Summit:</strong> One fully funded in-person residential summit with other members of your cohort.</li>
-          <li><strong>Higher Education Scholarships:</strong> A four-year, post-secondary education scholarship, including tuition and a living stipend, based on need and where not already covered by financial aid.</li>
-          <li><strong>Funding for Ideas on a Competitive Basis:</strong> Opportunity to apply for funding to experiment with innovative ideas to address major problems in local communities or around the world—ranging from seed money to start a social enterprise to a grant for a non-profit. Funds will be available competitively to Fellows and Finalists.</li>
-          <li><strong>Network Matching:</strong> Access to an extended network, including other Fellows and individuals from the Schmidt organization and the Rhodes Trust Partnership Programmes, as well as career development programming.</li>
-          <li><strong>Starter Technology Packages:</strong> A technology package, such as a laptop or tablet, to be determined and issued immediately before or during the first semester/term of tertiary education.</li>
-        </ul>
-        <p>In addition, the program may provide additional benefits and services to Fellows and other members depending on need and funding. These may include the opportunity to apply for scholarships for a graduate degree; access to partner opportunities; and additional convenings, whether online or in-person, for network members to work on areas of common interest.</p>
-        <div class="note">Rise funding is intended to support Fellows during periods of full-time academic enrollment. Rise does not provide financial support for living expenses during internships, gap semesters/year, and/or periods between academic years.</div>
-        <p>Rise reserves the right to change the policies and procedures reflected in this Handbook in its sole discretion, provided that such changes are in accordance with the Rise Rules. You will be notified of any material changes.</p>
-      `},
-      { id:'s2', title:'2. Code of Conduct', html:`
-        <p>Rise supports promising young people and provides them with opportunities that allow them to work together to serve others over their lifetimes. Rise is committed to maintaining the highest degree of ethical conduct among all those who participate in or work on the program.</p>
-        <ul>
-          <li><strong>Rise Participants</strong> include Rise Finalists, Rise Fellows, and any individual taking part in Rise activities who is not a Rise Representative.</li>
-          <li><strong>Rise Representatives</strong> include staff, consultants, contractors, partner organizations, and any person acting on behalf of Rise.</li>
-        </ul>
-        <h3>Aim</h3>
-        <p>This Code aims to ensure that everyone involved in Rise feels safe, respected, and valued. Rise places a high value on integrity and empathy and requires all individuals to operate under those guiding principles.</p>
-        <h3>Scope</h3>
-        <p>By agreeing to this Code, you confirm that you understand and agree to follow its principles during all interactions with the Rise program, all Rise events and activities (in person or online), on all Rise-related platforms, and when acting on behalf of Rise.</p>
-        <h3>Core Expectations</h3>
-        <p>All Rise Participants and Rise Representatives are expected to:</p>
-        <ul>
-          <li>Follow applicable laws and Rise policies and procedures</li>
-          <li>Act in a way that positively represents the Rise program</li>
-          <li>Treat others with respect and recognize their rights and dignity</li>
-          <li>Act honestly and with integrity</li>
-          <li>Respect personal boundaries and the privacy of others</li>
-          <li>Use appropriate language and behavior</li>
-          <li>Speak up if they feel unsafe or are concerned about someone else's safety</li>
-        </ul>
-        <p>Individuals must not harass, threaten, or bully others; use inappropriate or offensive language; misrepresent their role within Rise; misuse the Rise name or logo; share private information without permission; retaliate against any person who raises a concern; or discriminate against any person on the basis of identity or background.</p>
-        <h3>Additional Expectations for Rise Representatives</h3>
-        <ul>
-          <li>Maintain the highest standards of professionalism and personal integrity</li>
-          <li>Avoid any conduct that could be seen as inappropriate or an abuse of trust</li>
-          <li>Avoid being alone with participants under the age of 18 whenever possible</li>
-          <li>Report safeguarding concerns in accordance with the Rise Safeguarding Policy</li>
-        </ul>
-        <h3>Additional Expectations for Rise Participants</h3>
-        <ul>
-          <li>Follow all rules related to selection, programming, and funding</li>
-          <li>Be honest in all interactions, applications and submissions</li>
-          <li>Not rely upon unauthorized assistance</li>
-          <li>Not interfere with or undermine another Rise Participant's application or standing</li>
-          <li>Participate in required programming when applicable</li>
-        </ul>
-        <div class="warning">Failure to follow these rules may result in disciplinary action, including loss of status or benefits.</div>
-        <h3>Reporting Violations</h3>
-        <p>Any violations or good faith suspected violations of this Code of Conduct should be reported to a Rise staff member in person or by email: <a href="mailto:fellows@risefortheworld.org">fellows@risefortheworld.org</a>.</p>
-      `},
-      { id:'s3', title:'3. Rise Funding Processes', html:`
-        <h3>Accessing Rise Funding Forms</h3>
-        <p>Links for Rise Funding Forms will be shared directly with you via email and can be accessed through the Fellow Portal. To login to the Funding Forms you will need your email and your unique Fellow ID. You will then receive a 2-step verification code.</p>
-        <ul>
-          <li><strong>Funding Request Form:</strong> Use when asking Rise to make a payment to you, with the exception of higher education stipend payments.</li>
-          <li><strong>University Payment Request Form:</strong> Use when asking Rise to make a payment directly to your university or college.</li>
-        </ul>
-        <h3>After You Submit a Funding Form</h3>
-        <ol>
-          <li>Due diligence checks performed by up to two Rise team members.</li>
-          <li>Additional checks and processing by the Rhodes Trust finance team.</li>
-          <li>The issuing of payment instructions.</li>
-          <li>The delivery of funds onto your B4B card, into your bank account, or to an approved institution.</li>
-        </ol>
-        <h3>Frequently Asked Questions</h3>
-        <h4>How long does a funding request take to process?</h4>
-        <p>On average, Rise funding requests take up to 10 business days to process. Missing information and inaccuracies in forms can cause delays. Once approved, B4B Card uploads occur instantly. International bank transfers can take a few working days, longer in certain countries.</p>
-        <h4>What date should I enter in the funding request form?</h4>
-        <p>For most requests, select the date 10 business days after you are submitting the request. For urgent requests, select the business day before you need to make the payment.</p>
-        <h4>What currency should I enter?</h4>
-        <p>Please make sure you enter the currency that the payment is charged in.</p>
-        <h4>What bank information do I need to provide?</h4>
-        <p>Always include international payment details such as the SWIFT code, IBAN number, or Clabe code, as relevant for your banking system.</p>
-        <h3>Using Your B4B Card</h3>
-        <p>Rise issues Fellows with prepaid "B4B" Mastercards which Rise will pre-load with funds to cover expenses explicitly approved by the Rise Team.</p>
-        <div class="img-ph">📸 [Image: B4B Card — Rise Prepaid Mastercard]</div>
-        <h4>Getting Started with Your B4B Card</h4>
-        <ol>
-          <li><strong>General Guidance:</strong> Not all countries allow B4B cards. Check your eligibility in the FAQs below. Fellows are responsible for keeping their B4B cards safe.</li>
-          <li><strong>Sign the Conditions of Use policy document</strong> before Rise will issue your card.</li>
-          <li><strong>Apply for your B4B card</strong> by completing the B4B application form shared by the Fellow Support team. Include your phone number with country code and your full, permanent address.</li>
-          <li><strong>Register your B4B card</strong> online at <a href="https://www.b4bpayments.com/login" target="_blank">b4bpayments.com/login</a> or via the B4B app. You'll need your date of birth and card number.</li>
-        </ol>
-        <h4>Countries where B4B cards cannot be issued:</h4>
-        <p>Belarus, Ethiopia, India, Iran, Lebanon, Libya, Myanmar, Palestine, South Sudan, Ukraine, Venezuela, Zimbabwe. Rise will work with Fellows in these countries to find alternative funding channels.</p>
-        <h4>B4B Card FAQs</h4>
-        <ul>
-          <li><strong>How do I approve a transaction?</strong> B4B will often require multi-factor authentication. You can approve via the B4B app or portal website.</li>
-          <li><strong>Can I use my B4B card at an ATM?</strong> Rise B4B cards are automatically set to not allow ATM withdrawals. Contact fellows@risefortheworld.org to request temporary ATM access if needed.</li>
-          <li><strong>Does B4B charge transaction fees?</strong> Payments in USD are free. Payments in other currencies incur an FX fee of up to 3%.</li>
-          <li><strong>How do I upload receipts?</strong> Log into your B4B portal, find the transaction, click "View More," then "Upload Receipt." Use the description box to explain the item.</li>
-        </ul>
-        <h4>B4B Card Support</h4>
-        <ul>
-          <li>Phone: +44 20 3475 5351 (Europe) or +1 604 200 0554 (Americas)</li>
-          <li>Email: <a href="mailto:customer.services@b4bpayments.com">customer.services@b4bpayments.com</a></li>
-          <li>Live Chat: Available on the B4B website</li>
-        </ul>
-        <div class="warning">If your B4B card is lost or stolen: (1) Contact <a href="mailto:fellows@risefortheworld.org">fellows@risefortheworld.org</a> immediately, and (2) Log into your B4B portal and press "Report Lost or Stolen."</div>
-        <h3>Financial Responsibility</h3>
-        <p>A big part of your educational journey is learning to be financially independent. You are responsible for budgeting and planning your spending accordingly.</p>
-        <div class="img-ph">📸 [Image: Financial Responsibility — Budget, Bank Accounts, Safety & Fraud tiles]</div>
-        <h4>Budgeting Resources</h4>
-        <ul>
-          <li><a href="https://www.savethestudent.org" target="_blank">Save the Student</a> — UK-focused budgeting tips</li>
-          <li><a href="https://www.numbeo.com" target="_blank">Numbeo</a> — Estimated costs by city worldwide</li>
-          <li><a href="https://www.bestcolleges.com" target="_blank">Best Colleges</a> — US-focused budget worksheet</li>
-        </ul>
-        <h4>Rise Bank Details Collection Form</h4>
-        <p>In order for Rise to send funds, Fellows must complete the RISE Fellows Bank Details Collection Form. Required fields include: Full Name, Rise Fellow ID, Bank Name, Country, Account Number, Bank SWIFT Code, Account IBAN Code, and Home Address.</p>
-        <div class="note">PLEASE DO NOT ADD ANY SPACES, LETTERS OR CHARACTERS TO YOUR ACCOUNT AND IBAN NUMBERS ON THE FORM.</div>
-      `},
-      { id:'s4', title:'4. How to Visit the Rise Team in NYC', html:`
-        <p>Fellows are welcome to arrange a voluntary in-person visit to meet with the Rise Team in New York City (NYC). Criteria for a visit:</p>
-        <ul>
-          <li>You are aged 18 or older and act in a responsible and safe manner throughout your visit.</li>
-          <li>You arrange the logistics of your visit to NYC yourself, including transportation.</li>
-          <li>You cover any costs associated with your visit.</li>
-          <li>Your visit takes place on a working weekday between 9:30 AM – 4:30 PM during our Rise in-office hours (excluding public holidays and subject to staff availability).</li>
-          <li>You email <a href="mailto:fellows@risefortheworld.org">fellows@risefortheworld.org</a> to give at least 1–2 weeks' notice. Include the hours and days you are available, your full name, email, telephone number, and any topics you'd like to discuss.</li>
-          <li>You arrive at the Rise office punctually on the agreed time and date.</li>
-          <li>You check in with the front desk in the lobby and wait to be met there by a member of the Rise Team.</li>
-        </ul>
-      `},
-      { id:'s5', title:'5. Rise Letter of Recommendation Guidance', html:`
-        <p>At Rise, letters of recommendation should come from individuals who can speak credibly about your qualifications.</p>
-        <h3>Academic Recommendations</h3>
-        <ul>
-          <li>Professors or instructors who taught you in relevant courses</li>
-          <li>Academic advisors or thesis/dissertation supervisors</li>
-          <li>Research supervisors or lab directors</li>
-          <li>Department chairs (for exceptional circumstances)</li>
-        </ul>
-        <h3>Professional Recommendations</h3>
-        <ul>
-          <li>Direct supervisors or managers</li>
-          <li>Senior colleagues with direct knowledge of your work</li>
-          <li>Clients (in some professional contexts)</li>
-          <li>Mentors within your field</li>
-        </ul>
-        <div class="note">We recommend avoiding letters from individuals you've had minimal interactions with, people who cannot speak to your relevant skills, and/or people who may not write positive recommendations.</div>
-        <h3>Best Practices</h3>
-        <ul>
-          <li>Request letters at least 3 weeks in advance of the deadline</li>
-          <li>Provide the recommender with: specific deadline(s), purpose of the letter, job description or program details, your current resume/CV, and a brief summary of relevant accomplishments they witnessed</li>
-          <li>Send a thank you note once the letter is submitted</li>
-          <li>Update recommenders on the outcome when appropriate</li>
-        </ul>
-        <p>As standard practice, Rise can provide a general letter that outlines the Fellow's involvement in the program. If there is a very particular instance where a letter from Rise is truly beneficial, the Rise team member may offer to do so at their own discretion.</p>
-      `},
-      { id:'s6', title:'6. Disciplinary and Dismissal Policy', html:`
-        <h3>Policy Aim</h3>
-        <p>This policy outlines which disciplinary actions may be taken by Rise against a Rise Participant who has acted in contradiction of the Rise Code of Conduct, the Rise Safeguarding Policy, and other guidelines.</p>
-        <h3>Prohibited Behavior</h3>
-        <p>The following behaviors are strictly prohibited and may result in disciplinary action up to and including dismissal and loss of benefits:</p>
-        <ul>
-          <li>Any violation of the Rise Code of Conduct</li>
-          <li>Any violation of the Rise Terms of Use or other legal agreements</li>
-          <li>Failing to comply with directions from Rise Representatives acting in performance of their role</li>
-        </ul>
-        <h3>Disciplinary Procedure</h3>
-        <p>In the event of alleged misconduct, Rise will conduct a thorough inquiry. Rise Participants involved will be asked to provide information. The process may involve interviews and could take several weeks. In any cases that could lead to dismissal, Rise will summarize the information gathered and seek the Rise Participant's response.</p>
-        <h3>Disciplinary Actions</h3>
-        <ul>
-          <li><strong>Restorative Resolution Circles:</strong> A collaborative decision-making process to identify harm and necessary repairs.</li>
-          <li><strong>Restitution:</strong> The Participant may be required to cover costs of damage or return improperly obtained funds.</li>
-          <li><strong>Loss of Privileges or Benefits:</strong> Temporary loss of right to participate in programs or access Rise platforms; may include loss of higher education funding.</li>
-          <li><strong>Probation:</strong> May include no-contact instructions and modification of benefits.</li>
-          <li><strong>Verbal or Written Warnings:</strong> Specifies the policy violated and expectations for the Participant to meet to remain in the program.</li>
-          <li><strong>Dismissal:</strong> Permanent removal from the program, which may include loss of the "Rise Fellow" title and associated benefits.</li>
-        </ul>
-        <h3>Dismissal Policy</h3>
-        <p>A Rise Participant who is removed from the program will receive a Letter setting out the reason(s) for dismissal. Rise will provide the Rise Participant the opportunity to acknowledge its contents within a week.</p>
-        <p>A Rise Fellow or Rise Finalist dismissed due to misrepresentation or dishonesty may be required to reimburse Rise, partner organizations, and their educational institution for all financial aid and any non-recoverable costs.</p>
-        <h3>Dismissal Appeals</h3>
-        <p>Rise dismissal decisions are appealable, except in cases of serious misconduct. If a dismissal is appealable and the Letter is timely acknowledged, the Participant may appeal within one week of acknowledging the letter, in writing with relevant documentation. Rise will review appeals and notify the Rise Participant in writing with a final decision.</p>
-      `}
-    ]
-  },
-  {
-    id:'prog', title:'Programming', icon:'🌐',
-    desc:'Community events, network building opportunities, and the Innovation Fund.',
-    sections:[
-      { id:'s7', title:'7. Rise Community and Network Overview', html:`
-        <p>Rise aims to cultivate a lifelong global network of leaders who collaboratively drive systemic change and build a more just, sustainable, and resilient world.</p>
-        <p>All Fellows are provided the following programming benefits:</p>
-        <ul>
-          <li><strong>Programming Kick Off:</strong> You are invited with your cohort to celebrate your achievement, connect with other Fellows, meet Rise staff members, and learn more about the Rise community.</li>
-          <li><strong>Rise Residential Summit:</strong> A fully-funded Rise Residential Summit with other members of your cohort sometime between July–August after your selection.</li>
-          <li><strong>Community and Network Building:</strong> Ongoing opportunities including in-person and online meetups, mixers, and conferences; planning and advisory committees; workshops, discussion groups, coffee chats, and mentorship programs.</li>
-        </ul>
-        <p>For any questions about programming please contact <a href="mailto:fellows@risefortheworld.org">fellows@risefortheworld.org</a>.</p>
-      `},
-      { id:'s8', title:'8. 2026 Community & Network Building', html:`
-        <h3>Regional Meetups</h3>
-        <p>In 2026, Rise will host a limited number of regional in-person meetups in key geographical locations.</p>
-        <h4>Mark Your Calendars:</h4>
-        <ul>
-          <li>Philadelphia: Saturday, March 28, 2026</li>
-          <li>San Francisco Bay Area: Saturday, April 18, 2026</li>
-          <li>London: Saturday, May 16, 2026</li>
-          <li>Boston: Saturday, September 12, 2026</li>
-          <li>Chicago: Saturday, October 3, 2026</li>
-        </ul>
-        <p>Fellows residing in these regions will receive a formal invitation with registration links closer to the meetup dates. All meetups will offer an informal mixer format including mingling, food/drinks, networking activities, and opportunities for quick talks. Rise covers the cost of the event itself (venue, food, and organized activities). Rise will provide small fixed stipends to help cover local travel costs but will not provide accommodation.</p>
-        <div class="note">To ensure broad access, Rise asks that Fellows choose only one regional meetup to attend.</div>
-        <h3>Extended Network Mentoring Program</h3>
-        <p>A new virtual mentoring program in collaboration with the Rhodes Trust and the Atlantic Institute. Open exclusively to Fellows aged 18 and older.</p>
-        <ul>
-          <li>Virtual peer-to-peer mentoring within and across the Rise extended network</li>
-          <li>Topic-specific mentoring programs launched throughout the year</li>
-          <li>Closed online community of Rise Fellows, Rhodes Scholars, and Atlantic Fellows</li>
-        </ul>
-        <p>Create your <a href="https://www.upnotch.com" target="_blank">Upnotch profile</a> to begin building meaningful mentoring relationships.</p>
-        <h3>Fellow Advisory Committee</h3>
-        <p>This committee will support the Fellow experience by providing input and planning support for key initiatives and events, particularly the Rise Global Convening planned for July 2027.</p>
-        <ul>
-          <li>8–10 committee members selected for a 1-year term (July 1 – July 31)</li>
-          <li>Leadership visibility, direct impact on Rise community, skill development, and networking</li>
-          <li>Applications will open in March</li>
-        </ul>
-        <h3>2026 Rise Forum — Virtual Fellow-Led Conference</h3>
-        <p><strong>Date:</strong> Saturday, July 18 | <strong>Time:</strong> 9am – 1pm ET</p>
-        <ul>
-          <li>Connect, collaborate, and share from anywhere in the world</li>
-          <li>Submit session proposals (up to 3 per Fellow)</li>
-          <li>Innovation Fund Challenge Pitch Competition</li>
-        </ul>
-        <p>RSVP form opens by end of March. Session proposals due April 27.</p>
-        <h3>Social Impact Leadership Workshop Series</h3>
-        <p>In partnership with Omprakash. All workshops offered via Zoom with asynchronous follow-up in the Omprakash EdGE online learning space.</p>
-        <ul>
-          <li><strong>Workshop 1: Mindset</strong> — April 22–23, 2026. Reflect on mental patterns and experiment with alternative frameworks.</li>
-          <li><strong>Workshop 2: Beyond Good Intentions</strong> — June 10–11, 2026. Grapple with the complexity of "doing good" across differences of culture and power.</li>
-          <li><strong>Workshop 3: Ethical Storytelling for Social Impact</strong> — July 18, 2026 (at the Rise Forum). How, to whom, and for what purposes to share stories of social impact.</li>
-          <li><strong>Workshop 4: Conflict, Dialogue, and Relationships</strong> — September 23–24, 2026. Cultivating communication skills for resilient relationships.</li>
-          <li><strong>Workshop 5: Strategic Planning for Social Impact</strong> — November 18–19, 2026. Theory of change, sustainability, and mission drift.</li>
-        </ul>
-      `},
-      { id:'s9', title:'9. 2027 Community & Network Building', html:`
-        <h3>2027 Rise Global Convening</h3>
-        <p><strong>Dates:</strong> July 22–25, 2027 | <strong>Location:</strong> The Westin Bayshore, Vancouver, Canada</p>
-        <p>The Rise Global Convening will bring together Fellows from across cohorts and around the world for four days of workshops, networking, and local tours and experiences.</p>
-        <ul>
-          <li>All eligible Fellows invited (but not required) to attend</li>
-          <li>Travel + Visa assistance provided</li>
-          <li>All Fellows will be 18 and over</li>
-        </ul>
-        <h4>Why Vancouver?</h4>
-        <ul>
-          <li>A legacy of global-scale collaboration</li>
-          <li>A global city where cultures meet</li>
-          <li>A living laboratory for sustainability</li>
-          <li>Deep connections to indigenous knowledge and leadership</li>
-        </ul>
-        <div class="note">Save the date! Additional information to come in mid-2026.</div>
-      `},
-      { id:'s10', title:'10. Rise Innovation Fund', html:`
-        <p>An opportunity to compete for funding to experiment with innovative ideas to address major problems in local communities or around the world. This year, the 2026 Rise Innovation Fund Challenge is in collaboration with Equitech Futures.</p>
-        <p>Do you have an idea for using technology to tackle healthcare, education, climate, or governance challenges in your community? Whether you're thinking about building an app, launching a community program, or exploring AI tools, this is your starting point.</p>
-        <div class="note">You don't need a technical background or a polished business plan—just curiosity and a commitment to serving others.</div>
-        <h3>Two Flexible Tracks</h3>
-        <ul>
-          <li>💼 Commercial solutions (scalable tech products)</li>
-          <li>🌱 Social Enterprise solutions (community-focused impacts)</li>
-        </ul>
-        <h3>What You Can Win</h3>
-        <ul>
-          <li>15 finalist teams receive prototype funding, mentorship, and hands-on support</li>
-          <li>Dedicated workshop series to develop your idea from problem to prototype</li>
-          <li>Pitch at the July 2026 Rise Virtual Fellow-Led Conference for up to USD $10,000 in award funding, plus ongoing network access and funding pathway support</li>
-        </ul>
-        <p><strong>Application Opens:</strong> Tuesday, February 10 | <strong>Application Deadline:</strong> Friday, March 20</p>
-        <h3>Pre-Application Workshop Recordings</h3>
-        <ul>
-          <li>February 7: Kickoff call — recording and slide deck available</li>
-          <li>February 21: "Getting Ideas Out of Your Head" — recording and slides available</li>
-          <li>February 28: "Honing Your Problem Statement" — recording and slides available</li>
-          <li>March 7: "Application Excellence" — recording and slides available</li>
-        </ul>
-        <p>For access to workshop recordings and materials, contact <a href="mailto:fellows@risefortheworld.org">fellows@risefortheworld.org</a>.</p>
-      `}
-    ]
-  },
-  {
-    id:'uni', title:'Applying to University', icon:'🎓',
-    desc:'College advising, university partners, and financial aid guidance.',
-    sections:[
-      { id:'s11', title:'11. College Advising', html:`
-        <p>Welcome to the College Application Resources page, your starting point for navigating the path to higher education.</p>
-        <div class="embed-ph">📊 [Embedded Resource: Roadmap to University Handbook — Google Slides]</div>
-        <h3>Step 1 — Developing Your Application Strategy</h3>
-        <ul>
-          <li>Introduction to College Search and College Advising resources available via Fellow Support</li>
-          <li><strong>Unifrog:</strong> A useful tool that helps you navigate the Application Process globally. Rise provides you with a free account.
-            <ol>
-              <li>Go to <a href="https://www.unifrog.org/sign-in" target="_blank">unifrog.org/sign-in</a></li>
-              <li>Enter your email address</li>
-              <li>Enter <strong>RiseColleges2025</strong> as your password</li>
-              <li>Press Sign in (you'll be prompted to set a unique password)</li>
-            </ol>
-          </li>
-        </ul>
-        <h3>Step 2 — Explore Different Countries and Universities</h3>
-        <ul>
-          <li>Explore regions on the <a href="https://www.ucas.com" target="_blank">UCAS portal</a></li>
-          <li>Go on virtual campus tours</li>
-          <li>Explore the <a href="https://www.topuniversities.com/university-rankings" target="_blank">QS World Rankings</a></li>
-          <li>Explore Rise Global Partner Universities</li>
-        </ul>
-        <h3>Step 3 — External Resources</h3>
-        <ul>
-          <li><a href="https://ctcl.org" target="_blank">Colleges that Change Lives</a></li>
-          <li><a href="https://www.collegedata.com" target="_blank">College Data</a></li>
-          <li><a href="https://bigfuture.collegeboard.org" target="_blank">College Board: College & Career Search</a></li>
-          <li><a href="https://www.mastersportal.eu" target="_blank">Study Portals Course Search</a></li>
-        </ul>
-        <h3>Step 4 — Application Systems</h3>
-        <ul>
-          <li>United States: Common App</li>
-          <li>United Kingdom: UCAS</li>
-          <li>Ireland: CAO</li>
-          <li>Canada: EduCanada</li>
-        </ul>
-        <h3>Developing Your University List</h3>
-        <p>As you finalize your list, aim for a balanced selection with a mix of safety, match, and reach schools. We recommend aiming for 3–4 universities in each category.</p>
-        <h3>Understanding Deadlines (US)</h3>
-        <p>To better understand the various deadlines and early admissions programs found in the US University Admissions system, please read Rise's Early Decision and Early Admission FAQs document (contact <a href="mailto:fellows@risefortheworld.org">fellows@risefortheworld.org</a> for access).</p>
-        <h3>After You've Applied</h3>
-        <ul>
-          <li>Check your university portal regularly for any updates or emails</li>
-          <li>Submit any additional documents asked for as soon as you can</li>
-        </ul>
-      `},
-      { id:'s12', title:'12. Rise Global University Partners', html:`
-        <p>Rise has partnered with a group of universities across the globe to co-invest in the education of Rise Fellows. These Rise Global University Partners may be of interest to Rise Fellows seeking to pursue a 3- or 4-year undergraduate degree, according to financial need.</p>
-        <h3>Why Choose a Rise Global University Partner?</h3>
-        <ul>
-          <li>Rise partner universities understand the full extent of your achievement as a Rise Fellow</li>
-          <li>Rise partner universities will be more proactive in providing support to Rise Fellows</li>
-        </ul>
-        <h3>How to Apply</h3>
-        <ol>
-          <li>Let Rise know by completing your University Application Reporting Form</li>
-          <li>Apply through the standard process, sharing that you are a Fellow in your application</li>
-          <li>If applying to a US partner university: you must apply for financial aid</li>
-          <li>If applying to University of Edinburgh: an additional form is required</li>
-        </ol>
-        <h3>Current Rise Global University Partners</h3>
-        <p>Ashesi University · African Leadership University · Davidson College · Durham University · Imperial College London · The University of Iowa · Lucy Cavendish College (University of Cambridge) · Minerva University · Northwestern University · NYU Abu Dhabi · Skidmore College · Stanford University · Tecnologico de Monterrey · The University of Chicago · The University of Edinburgh · University of Notre Dame · The University of Queensland · Vanderbilt University</p>
-        <p>For factsheets and webinar recordings for each university, contact <a href="mailto:fellows@risefortheworld.org">fellows@risefortheworld.org</a>.</p>
-        <h3>FAQs</h3>
-        <ul>
-          <li><strong>Do I have to attend a Rise partner university to receive Rise funding?</strong> No, Rise wants you to pick the university that is the best fit for you.</li>
-          <li><strong>Do I still need to complete the CSS Profile?</strong> Yes, completing the CSS Profile is mandatory to access higher education funding for all Rise Fellows.</li>
-          <li><strong>What if I am already attending a Rise Partner University?</strong> Your funding package and support will remain the same for the duration of your degree. No action needed.</li>
-        </ul>
-      `},
-      { id:'s13', title:'13. Rise Funding and Applying to University', html:`
-        <h3>Applying for Financial Aid</h3>
-        <ul>
-          <li><strong>UCAS (UK):</strong> Select "Private funding" as your main funding source. This is only for data purposes and is not shared with universities.</li>
-          <li><strong>Common App & CSS Profile (US):</strong> Do not list Rise as a funding source. Rise funding is needs-based and will be assessed separately.</li>
-        </ul>
-        <h3>Need-Blind vs Need-Aware Applications</h3>
-        <ul>
-          <li><strong>Need-Blind:</strong> Admissions decisions are not influenced by your request for aid. Apply for financial aid and any merit-based scholarships.</li>
-          <li><strong>Need-Aware:</strong> Financial need may affect your admission outcome. Apply for merit-based scholarships only.</li>
-        </ul>
-        <div class="warning">If you do not apply for aid where mandatory, you could potentially lose your Rise funding.</div>
-        <h3>Critical Funding Information (US Focus)</h3>
-        <p><strong>Rise as a "Funder of Last Resort":</strong> Rise only covers what your family and other scholarships cannot, based on the CSS Profile, Expected Family Contribution (EFC), and Institutional Aid.</p>
-        <p><strong>Scholarship Displacement:</strong> Some universities reduce their own aid if additional funding (like Rise) is received. Rise does not displace any grant-based aid. Research your university's scholarship displacement policies early.</p>
-        <h3>Student Loans and Work</h3>
-        <ul>
-          <li>Rise recognizes that some Fellows or their families may take student loans. This does not impact available Rise funding.</li>
-          <li>Rise does not include term-time student earning expectations in its need calculations and does not consider work-study as financial aid.</li>
-          <li>Rise is willing to work with institutions to replace university-offered loans with Rise funding when necessitated by need calculations.</li>
-        </ul>
-        <h3>Rise Transfer Policy</h3>
-        <p>If you're considering transferring to a different university, you must first confirm the transfer policy, application deadlines, and academic calendar of your intended new university. Then email <a href="mailto:fellows@risefortheworld.org">fellows@risefortheworld.org</a> before confirming your transfer.</p>
-        <p>Rise requirements for transfer eligibility include applying for needs-based and merit-based aid, and transferring into Year 2 or higher unless not possible (with evidence).</p>
-        <h3>Rise Living Stipend</h3>
-        <p>Eligible Fellows receive needs-based financial support to help cover living expenses while at university. Amounts are adjusted based on your university country, financial aid and external scholarships awarded, and your EFC based on the CSS profile.</p>
-        <h3>Study Abroad</h3>
-        <p>Rise will fund a year/semester abroad provided courses transfer back to your home university as credit toward your degree and your time abroad does not extend your degree beyond the standard 4 years of Rise funding.</p>
-        <h3>Planning Your University Budget</h3>
-        <ul>
-          <li><a href="https://www.numbeo.com" target="_blank">Numbeo</a> — Estimated costs by city</li>
-          <li><a href="https://www.savethestudent.org" target="_blank">Save the Student</a> — UK budget tips</li>
-          <li><a href="https://www.bestcolleges.com" target="_blank">Best Colleges</a> — US budget worksheet</li>
-        </ul>
-        <div class="embed-ph">📊 [Embedded Resource: External Scholarships Table — filtered by destination]</div>
-      `}
-    ]
-  },
-  {
-    id:'css', title:'CSS Profile', icon:'📋',
-    desc:'How to complete the CSS Profile for Rise higher education funding.',
-    sections:[
-      { id:'s14', title:'14. CSS Profile Guide', html:`
-        <p>To be considered for Rise Higher Education Funding, you must complete the CSS Profile annually, with assistance from your parents/guardians. This form helps Rise assess financial-need fairly across countries using a consistent methodology. Plan to spend approximately 3 hours completing it.</p>
-        <h3>Deadlines for AY 2026/2027</h3>
-        <ul>
-          <li><strong>October 1, 2025:</strong> CSS Profile opens; Rise shares instructions & fee waiver code</li>
-          <li><strong>October 31, 2025:</strong> Early submission deadline (recommended for Early Action/Decision applicants)</li>
-          <li><strong>January 15, 2026:</strong> Final submission deadline</li>
-          <li><strong>February 22, 2026:</strong> Appeals submission deadline</li>
-        </ul>
-        <h3>What Does Rise Do Differently?</h3>
-        <ul>
-          <li>Waives first $5,000 of your calculated EFC</li>
-          <li>Waives your own earning capacity</li>
-          <li>Adds cost-of-living protection for low-income countries</li>
-          <li>Rounds outcomes down to the nearest $500</li>
-        </ul>
-        <div class="embed-ph">📊 [Embedded Resource: CSS Profile walkthrough videos — 5 steps to complete]</div>
-        <h3>Key Profile Sections and Tips</h3>
-        <h4>Parental Income and Employment</h4>
-        <ul>
-          <li><strong>Total Wages:</strong> All income earned from working for someone else — base salary, bonuses, overtime, commissions. Do not include business income here.</li>
-          <li><strong>Business Income:</strong> Net income (after expenses) from owning or operating a business. If the business lost money, report as a negative number.</li>
-          <li><strong>Total Compensation from Employers:</strong> Wages plus any non-cash benefits like housing, meals, or travel allowances.</li>
-        </ul>
-        <h4>Taxes and Deductions</h4>
-        <p>Rise counts as taxes paid: income tax, government/state health insurance, compulsory education loan repayments, state or government pension payments.</p>
-        <p>Not considered: private pensions, personal loans, car expenses, private insurance, or voluntary religious/investment contributions.</p>
-        <h4>Household and Family Circumstances</h4>
-        <ul>
-          <li><strong>Parent missing/no contact:</strong> Book a call with Fellow Support via the CSS Profile Call Option on Calendly. You may need to complete a Waiver Request Form.</li>
-          <li><strong>Parents together but at different addresses:</strong> You must submit two CSS Profiles (HHA and HHB). Mark parents as "separated" to enable this.</li>
-          <li><strong>Stepparent who doesn't support your education:</strong> Explain in the Special Circumstances box and upload supporting documents via IDOC.</li>
-          <li><strong>A sibling enrolled in university after CSS was submitted:</strong> Email fellows@risefortheworld.org with proof of enrollment, length of program, and how much your parents will contribute.</li>
-        </ul>
-        <h4>Assets and Savings</h4>
-        <ul>
-          <li>Report current balance in checking/savings accounts and investments on the date you complete the Profile.</li>
-          <li>For property: use Numbeo, Zoopla, or Zillow. If parents partially own the property, report only their portion.</li>
-          <li>For business ownership: report only the value of their ownership share.</li>
-        </ul>
-        <h4>Loss of Income or Job</h4>
-        <p>The CSS Profile is based on the most recently completed tax year. If a parent became unemployed after that period, you may request a reconsideration of your EFC after receiving your CSS Profile Outcome. Contact <a href="mailto:fellows@risefortheworld.org">fellows@risefortheworld.org</a> or schedule a call via Calendly.</p>
-      `}
-    ]
-  },
-  {
-    id:'atuni', title:'Attending University', icon:'🏫',
-    desc:'Higher education funding details, accommodation, and US immigration guidance.',
-    sections:[
-      { id:'s15', title:'15. Higher Education Funding', html:`
-        <h3>Eligible Costs</h3>
-        <ul>
-          <li>Tuition fees</li>
-          <li>Compulsory additional attendance fees (enrollment fees, student services fees, mandatory activity fees)</li>
-          <li>Room and board (including a meal plan)</li>
-          <li>Visa fees, including translation of documents, travel to/from visa center, and vaccinations</li>
-          <li>Living expenses (personal expenses, transport around campus, books and supplies)</li>
-          <li>Health Insurance or Surcharge, including dental insurance</li>
-          <li>Flights: up to one economy round trip between your institution and your home per academic year</li>
-        </ul>
-        <div class="note">A portion or all of these benefits may be taxable. Consult with an advisor at your university about how the rules may affect your individual income taxes.</div>
-        <h3>Rise Higher Education Funding Terms</h3>
-        <ul>
-          <li>Eligibility is conditioned on requesting financial aid from the institution and applying for any merit-based scholarships available</li>
-          <li>Rise will only cover costs that your family is unable to cover, as calculated by the CSS Profile</li>
-          <li>Scholarships will be offered for up to four years of post-secondary study at an accredited university</li>
-          <li>Continued eligibility is subject to providing requested grades and course information regularly</li>
-        </ul>
-        <h3>University Accommodation Guidance</h3>
-        <p>Rise asks that you first select accommodation as follows: a shared room (twin/double) for you and one other student (if available); dormitory or hall-type residence; shared washrooms or bathrooms. Rise recommends choosing on-campus accommodation in your first year.</p>
-        <h4>Off Campus Accommodation</h4>
-        <ol>
-          <li><strong>Step One:</strong> Ask your university for their estimate of the cost to rent a room in the local area. Share that information with Rise.</li>
-          <li><strong>Step Two:</strong> Look for a contract. Any weekly rental costs in excess of the university's published figures may result in a corresponding reduction in your stipend amount.</li>
-          <li><strong>Step Three:</strong> Let Rise know about your housing as part of the Academic Year Information Form.</li>
-        </ol>
-        <div class="note">Rise cannot act as a guarantor or sign a lease agreement on your behalf.</div>
-        <h3>Rise Technology Package</h3>
-        <p>Rise will cover a maximum of $1,500 per Fellow for a one-time payment to purchase a laptop. If the chosen laptop costs less than $1,500, Fellows may also use remaining funds for accessories: headset, webcam, keyboard, mouse, software (such as MS Office), printer, external monitor.</p>
-        <div class="warning">This funding is not available for phones. The Technology Package can only be redeemed once. Rise is not responsible for repairs or replacements if a laptop breaks, is lost, or stolen.</div>
-        <h3>Higher Education Flights Policy</h3>
-        <p>Rise uses a travel agency called Take2Eton. You must inform the Support Services team that you require a flight at least 2 months prior to travel.</p>
-        <p><strong>Take2Eton Contact:</strong> (+44) 208 150 2939 | Office Hours: 08:30–18:00 GMT, Monday to Friday</p>
-        <h3>Visas and Immigration FAQs</h3>
-        <ul>
-          <li><strong>When should I apply for a visa?</strong> As early as possible. The visa application process can be very slow.</li>
-          <li><strong>Will Rise provide a funding letter for my visa?</strong> Yes, if Rise is funding a significant portion of your higher education costs, Rise will automatically issue an official Rise funding letter.</li>
-          <li><strong>I'm struggling to get an F-1 visa appointment — what should I do?</strong> Continue checking the embassy portal regularly, speak with the consulate, contact your new institution's international student office, and contact Education USA in your country.</li>
-        </ul>
-      `},
-      { id:'s16', title:'16. U.S. Immigration Guidance', html:`
-        <p><em>Updated December 19, 2025</em></p>
-        <div class="warning">Rise is closely following immigration developments and is deeply committed to ensuring all our Fellows can continue their educational pursuits.</div>
-        <h3>Eligibility for Support</h3>
-        <ul>
-          <li>Be currently enrolled at university (support not available after graduation)</li>
-          <li>Have been enrolled prior to the 2025–26 academic year</li>
-          <li>Be subject to a full or partial travel ban</li>
-        </ul>
-        <div class="note">Your main contact for visa-related matters is your university. Reach out to the International Office for the latest information.</div>
-        <h3>Visa Support</h3>
-        <p>Rise offers support if you face a visa renewal denial — financial assistance to help with the costs of reapplying for a US student visa. Alternatively, if returning to the US is challenging, Rise can offer financial support to apply for a student visa at a university in another country.</p>
-        <h3>Transfer Policy</h3>
-        <p>If your visa is revoked or you are denied entry to the US, you may apply to transfer to another university. Rise asks Fellows to:</p>
-        <ul>
-          <li>Apply for needs-based financial aid at need-blind institutions only</li>
-          <li>Apply for merit-based financial aid where available</li>
-          <li>Transfer into year 2 (or higher) unless you can provide evidence that this is not feasible</li>
-        </ul>
-        <p>Contact <a href="mailto:fellows@risefortheworld.org">fellows@risefortheworld.org</a> before transferring for approval.</p>
-        <h3>Summer Support to Remain in the US</h3>
-        <p>Fellows with an EFC under $10,000 may receive:</p>
-        <ul>
-          <li>Financial assistance for summer housing (on or off campus)</li>
-          <li>A monthly stipend for meals, transportation, and living expenses</li>
-          <li>Course enrollment if available and counts toward their major</li>
-        </ul>
-        <h3>Frequently Asked Questions</h3>
-        <ul>
-          <li><strong>My university issued a travel warning — can I still leave?</strong> Consult with your university's international student office or DSO to understand the risks and potential impacts on your status before making any travel decisions.</li>
-          <li><strong>If I'm detained or deported, will Rise support me?</strong> Rise does not provide legal representation or direct support for detention/deportation. However, Rise can provide guidance on next steps for higher education funding and program-related concerns. Contact your university's international student office or a legal professional specializing in immigration law.</li>
-          <li><strong>If I can't return to university due to visa issues, what happens to my Rise funding?</strong> Email <a href="mailto:fellows@risefortheworld.org">fellows@risefortheworld.org</a> as soon as possible to discuss your situation. Rise will provide guidance on potential options or adjustments.</li>
-          <li><strong>My visa was declined and I don't have a backup plan — what can I do?</strong> Speak with your university's admissions or international office about deferring admission. Consider reapplying for a visa, exploring universities in other countries, or looking into local/online degree programs. Inform Rise immediately at <a href="mailto:fellows@risefortheworld.org">fellows@risefortheworld.org</a>.</li>
-        </ul>
-      `}
-    ]
-  },
-  {
-    id:'safe', title:'Safeguarding & Wellbeing', icon:'🛡️',
-    desc:'Safeguarding policy, wellbeing support, and hardship funding.',
-    sections:[
-      { id:'s17', title:'17. Rise Safeguarding Policy', html:`
-        <h3>Purpose and Scope</h3>
-        <p>This policy sets out Rise's approach to safeguarding protections. It governs the conduct of all Rise Representatives and Rise Participants when interacting with Minors and is to be upheld regardless of remuneration status.</p>
-        <h3>Rise Designated Safeguarding Leads (DSLs)</h3>
-        <p>DSLs can be emailed collectively via <a href="mailto:safeguarding@risefortheworld.org">safeguarding@risefortheworld.org</a>.</p>
-        <ul>
-          <li>Mark German, Executive Director</li>
-          <li>Eiko Tsukamoto, Director, Support Services</li>
-          <li>Patrick Kenani, Advisor, Support Services</li>
-        </ul>
-        <h3>Making a Safeguarding Report</h3>
-        <ul>
-          <li><strong>Emergency:</strong> If a Rise Participant is in immediate danger, report immediately to the appropriate emergency services, then to one of the Rise DSLs.</li>
-          <li><strong>Non-emergency:</strong> Report to the Rise DSLs via <a href="mailto:safeguarding@risefortheworld.org">safeguarding@risefortheworld.org</a> within 24 hours or the nearest business day. Do not try to investigate the matter yourself.</li>
-        </ul>
-        <h3>How to Deal with a Disclosure</h3>
-        <ul>
-          <li>Never promise to keep the information secret</li>
-          <li>Stay calm and do not overreact</li>
-          <li>Listen and don't interrupt; reassure the Participant they did the right thing</li>
-          <li>Take notes immediately after: name, date, time, what was said (exact keywords), information about other parties involved</li>
-          <li>Do not write your own opinions or extrapolations</li>
-          <li>Do not make promises about what will happen next</li>
-          <li>Never try to investigate the disclosure yourself</li>
-        </ul>
-        <h3>Rise Safeguarding Measures</h3>
-        <ul>
-          <li>Fostering an open culture of reporting and whistleblowing — no adverse action will be taken against anyone who makes a report honestly and in good faith</li>
-          <li>A Simple Reporting Framework with well-advertised, simple reporting routes</li>
-          <li>Effective Action Following Reports, with trained DSLs responsible for escalating concerns</li>
-          <li>Promotion of Good Conduct between Rise Participants</li>
-        </ul>
-        <h3>Raising Concerns About Rise's Management of Reports</h3>
-        <ul>
-          <li>Email DSLs as a group: <a href="mailto:safeguarding@risefortheworld.org">safeguarding@risefortheworld.org</a></li>
-          <li>If the concern relates to DSLs, contact Rise Executive Director: <a href="mailto:executive@risefortheworld.org">executive@risefortheworld.org</a></li>
-          <li>If the concern relates to the Executive Director: <a href="mailto:resposito@risefortheworld.org">resposito@risefortheworld.org</a></li>
-        </ul>
-        <h3>Safeguarding Glossary</h3>
-        <ul>
-          <li><strong>Abuse:</strong> Any action that intentionally harms or injures another person. Includes physical, emotional, sexual abuse, and neglect.</li>
-          <li><strong>Bullying:</strong> When one person intentionally hurts another, either physically or emotionally.</li>
-          <li><strong>Grooming:</strong> When someone builds a relationship and emotional connection with a Minor to manipulate, exploit, and abuse them.</li>
-          <li><strong>Minor:</strong> Individuals under the legally defined age of majority (in most jurisdictions, 18).</li>
-          <li><strong>Safeguarding Report:</strong> Information received about actual or suspected harm, past or ongoing.</li>
-        </ul>
-      `},
-      { id:'s18', title:'18. Wellbeing Support', html:`
-        <p>Rise cares about the social and emotional wellbeing of all Rise Fellows and is committed to keeping Fellows safe. Rise understands that a Fellow's ongoing success is closely linked to their personal wellbeing.</p>
-        <h3>Rise Wellbeing Support Offerings</h3>
-        <ul>
-          <li>Helpful online wellbeing and mental health resources</li>
-          <li>Information on counseling services</li>
-          <li>Hardship support</li>
-          <li>Global Counseling and Wellbeing Resources (contact Rise for current links)</li>
-        </ul>
-        <h3>When You Might Need Support</h3>
-        <ul>
-          <li>While adjusting to a new school or country</li>
-          <li>While adjusting to university life</li>
-          <li>During final exams or projects</li>
-          <li>During seasonal changes in the weather</li>
-          <li>Following the death of a loved one</li>
-          <li>During extreme hardships (natural disasters, displacement, financial insecurity)</li>
-          <li>During other life changes or periods of uncertainty</li>
-        </ul>
-        <div class="note">Seeking support is not a sign of weakness but shows strength and respect for one's personal wellbeing.</div>
-        <h3>Accessing Support</h3>
-        <ul>
-          <li>Email <a href="mailto:fellows@risefortheworld.org">fellows@risefortheworld.org</a> to request additional information. A Rise team member will reach out within 3–4 business days.</li>
-          <li>Book a Wellbeing Check-In call via the Rise team Calendly page.</li>
-        </ul>
-        <div class="warning">Do not use the fellows email to share health information or to report a medical emergency — this inbox is not closely monitored and email is not appropriate for sharing sensitive health information. If you are in immediate danger, contact appropriate emergency services first.</div>
-        <h3>What is Rise Safeguarding?</h3>
-        <p>Safeguarding refers to the policies, procedures, and practices employed to protect young people who come into contact with Rise from all forms of harm, abuse, or exploitation. The safety and welfare of all Rise Fellows will be equally prioritized regardless of background, gender identity, race, beliefs, socio-economic status, or sexual orientation.</p>
-        <p>For non-emergency safeguarding concerns contact: <a href="mailto:safeguarding@risefortheworld.org">safeguarding@risefortheworld.org</a></p>
-      `},
-      { id:'s19', title:'19. Hardship Funding', html:`
-        <p>Rise understands that sometimes an individual's financial circumstances can change in unpredictable ways and for reasons outside of their control.</p>
-        <h3>What the Fund May Cover</h3>
-        <ul>
-          <li>A medical bill incurred by a Fellow which impacts their ability to fund their education</li>
-          <li>Technology equipment used for education or Rise that is lost, damaged, or required due to a natural disaster or regional conflict</li>
-          <li>Travel home from secondary school or university for an emergency/bereavement</li>
-          <li>Unexpectedly high costs that could not have been foreseen and which impact the Fellow's education or participation in Rise</li>
-        </ul>
-        <h3>What the Fund Does Not Cover</h3>
-        <ul>
-          <li>Predictable educational costs</li>
-          <li>Educational additive experiences</li>
-          <li>Hobbies or leisure activities</li>
-          <li>Learning platform subscriptions</li>
-          <li>Visa support costs (assessed and offered by the Rise team separately)</li>
-          <li>Wellbeing needs (see the Wellbeing and Safeguarding page)</li>
-        </ul>
-        <h3>How to Apply</h3>
-        <p>Complete the Rise Funding Request Form and select the relevant 'Hardship' category code. Include:</p>
-        <ul>
-          <li>The amount requested</li>
-          <li>The purpose of the funds</li>
-          <li>A brief explanation of why you are requesting access to the Rise Hardship Fund</li>
-          <li>Proof of cost</li>
-          <li>Evidence of prior attempts to reduce or alleviate the financial need (where applicable)</li>
-        </ul>
-        <div class="note">Standard review and funding processing timelines apply and may be extended if Rise requires additional financial need information.</div>
-        <p>The Rise Hardship Fund is a finite resource. Rise asks Fellows to be aware of this when choosing to submit a support request. For any questions, contact <a href="mailto:fellows@risefortheworld.org">fellows@risefortheworld.org</a>.</p>
-        <p><em>This policy is reviewed on an annual basis. Last updated: March 20, 2026.</em></p>
-      `}
-    ]
-  },
-  {
-    id:'post', title:'Postgraduate', icon:'🎯',
-    desc:'Graduate education funding, external scholarships, and post-graduation support.',
-    sections:[
-      { id:'s20', title:'20. Rise Graduate Education Funding', html:`
-        <h3>Application Timeline for 2026 Cycle</h3>
-        <ul>
-          <li><strong>February 9, 2026:</strong> Applications Open</li>
-          <li><strong>March 31, 2026:</strong> All application materials due (including letters of recommendation) by 12:00 PM EST</li>
-          <li><strong>April 30, 2026:</strong> Decisions Announced</li>
-          <li><strong>May 20, 2026:</strong> Deadline to confirm degree program and submit Graduate Degree Information Form</li>
-          <li><strong>May 29, 2026:</strong> Waitlisted Applicants notified if selected</li>
-        </ul>
-        <h3>Application Process — FAQs</h3>
-        <ul>
-          <li><strong>Why can't I apply earlier than my last year of undergraduate?</strong> Fellows are eligible to apply in their final year of study. You may also apply after completing your undergraduate, as long as you intend to start your graduate degree within 2.5 years of completing your undergraduate degree.</li>
-          <li><strong>Why are JDs, MDs, DVMs, PhDs, DPhils, and MBAs not eligible?</strong> Rise Graduate Education Funding is intended to support one 12-month period of graduate education. These degree types typically require 3–4+ additional years of study. MBAs are also normally best explored after several years in industry, later than the eligible timeframe.</li>
-          <li><strong>Why does Rise ask about other scholarships I have applied for?</strong> Rise believes you should be able to leverage your talent and social capital to secure support from multiple sponsors. Rise asks that you demonstrate evidence of seeking additional financial support.</li>
-        </ul>
-        <h3>Recommenders</h3>
-        <ul>
-          <li><strong>Letter of Recommendation:</strong> Should be provided by someone with knowledge of your chosen graduate degree program — most likely a professor, lecturer, or faculty member. The Letter will be requested directly by Rise and provided separately.</li>
-          <li><strong>Letter in Support:</strong> Should come from a member of the Rise Fellow community who can comment on your contributions to the Rise community, commitment to positive change, and service to others. Should be a Rise Fellow who has known you for an extended period (ideally above 18 months).</li>
-        </ul>
-        <h3>Funding Decisions</h3>
-        <p>If your application is successful, Rise Graduate Education Funding will be offered as USD $25,000 or the cost of attendance, whichever is lower. Funding will be issued directly to you in one lump-sum payment, to coincide with the start of your studies.</p>
-        <h3>Application Outcome Decisions</h3>
-        <ul>
-          <li><strong>Waitlisted:</strong> Rise intends to update all waitlisted candidates in late May.</li>
-          <li><strong>Offered funding but preferred university declined:</strong> Let Rise know as soon as possible by the deadline set for your enrollment decision.</li>
-          <li><strong>Unsuccessful:</strong> If Rise offers Graduate Education Funding in a future year, you will be able to re-apply.</li>
-        </ul>
-      `},
-      { id:'s21', title:'21. External Postgraduate Opportunities', html:`
-        <h3>The Rhodes Scholarship</h3>
-        <div class="img-ph">🏛️ [Rhodes Scholarship Logo — Visit <a href="https://www.rhodeshouse.ox.ac.uk" target="_blank">rhodeshouse.ox.ac.uk</a> to Learn More]</div>
-        <p>Rise Fellows are encouraged to explore and apply for the Rhodes Scholarship and other postgraduate opportunities.</p>
-        <div class="embed-ph">📊 [Embedded Resource: External Postgraduate Scholarships Table — filtered by destination]</div>
-        <div class="note">Rise strongly encourages Rise Fellows to explore and apply for any and all scholarship opportunities that match their chosen postgraduate education destination. If you would like to discuss any opportunities in more detail, please book a Zoom call by clicking on the <a href="https://calendly.com/rise-for-the-world" target="_blank">Rise Calendly Page</a> and selecting the 'Higher Education Call' option, or email <a href="mailto:fellows@risefortheworld.org">fellows@risefortheworld.org</a>.</div>
-        <p>The sharing of these opportunities does not mean that Rise directly or indirectly endorses these programs, organizations, or scholarships. Any action taken is strictly at your own discretion.</p>
-      `},
-      { id:'s22', title:'22. Post-Graduation Support', html:`
-        <p>Rise provides certain benefits to support Fellows and to encourage a lifetime of service and learning. These benefits are primarily delivered through secondary and undergraduate education support. Upon graduating, Fellows will have the opportunity to apply for the Rise Graduate Education Fund and the Rise Innovation Fund.</p>
-        <h3>What Rise Does Not Fund Post-Graduation</h3>
-        <p>Please note that the following costs are not among the benefits provided to Fellows upon graduation:</p>
-        <ul>
-          <li>Rent, utilities, groceries and household supplies, moving expenses/storage costs</li>
-          <li>Taxes on your education</li>
-          <li>Professional clothes for job interviews and work</li>
-          <li>Work visa or work salaries</li>
-          <li>Insurance (medical, dental, vision, housing)</li>
-          <li>Travel costs beyond what is offered through our higher education travel policy</li>
-          <li>Vehicle or transportation costs</li>
-          <li>Student loan payments</li>
-          <li>Job search expenses, professional licenses or certifications</li>
-          <li>Continuing education or training courses</li>
-          <li>Networking event fees and professional association memberships</li>
-          <li>Credit card fees or other costs of living</li>
-        </ul>
-        <h3>Tips for a Smooth Post-Graduation Transition</h3>
-        <ul>
-          <li>Build your emergency fund while still in school, even if it's in small amounts</li>
-          <li>Apply for jobs 4–5 months before graduation so you can have income lined up</li>
-          <li>Research the cost of living in cities where you might work</li>
-          <li>Practice budgeting with your current expenses to build the habit</li>
-          <li>Keep living expenses low</li>
-          <li>Use your university career services to support you with your job search</li>
-        </ul>
-      `}
-    ]
-  }
-];
+const API_URL = "https://script.google.com/macros/s/AKfycbxWpy7prAGQ13eOeXIOZoUfIsZ_yynbAQar33rthMfnYs4J01fXnZknhdphSR1yMnuK/exec";
 
-// ── Show Home ──
-function showHome() {
-  document.querySelectorAll('.content-panel').forEach(p => p.classList.remove('active'));
-  document.querySelectorAll('.sec-btn').forEach(b => b.classList.remove('active'));
-  document.querySelectorAll('.cat-btn').forEach(b => b.classList.remove('open'));
-  document.querySelectorAll('.cat-sections').forEach(s => s.classList.remove('open'));
-  document.getElementById('panel-home').classList.add('active');
-  document.getElementById('hb-search').value = '';
-  document.querySelectorAll('.sec-btn').forEach(b => b.style.display = '');
-  window.scrollTo({ top: 0, behavior: 'smooth' });
+// Icon map — matched by category title keyword
+const ICON_MAP = {
+  'getting started': '🏠',
+  'programming': '🌐',
+  'applying': '🎓',
+  'css': '📋',
+  'attending': '🏫',
+  'safeguarding': '🛡️',
+  'wellbeing': '🛡️',
+  'postgraduate': '🎯'
+};
+
+function getCatIcon(title) {
+  const t = title.toLowerCase();
+  for (const [key, icon] of Object.entries(ICON_MAP)) {
+    if (t.includes(key)) return icon;
+  }
+  return '📄';
 }
+
+function getCatDesc(title) {
+  const t = title.toLowerCase();
+  if (t.includes('getting')) return 'Benefits, code of conduct, funding, and program policies.';
+  if (t.includes('programming')) return 'Community events, network building opportunities, and the Innovation Fund.';
+  if (t.includes('applying')) return 'College advising, university partners, and financial aid guidance.';
+  if (t.includes('css')) return 'How to complete the CSS Profile for Rise higher education funding.';
+  if (t.includes('attending')) return 'Higher education funding details, accommodation, and US immigration guidance.';
+  if (t.includes('safeguard') || t.includes('wellbeing')) return 'Safeguarding policy, wellbeing support, and hardship funding.';
+  if (t.includes('postgraduate')) return 'Graduate education funding, external scholarships, and post-graduation support.';
+  return '';
+}
+
+// ── Content renderer ──
+function renderContent(content) {
+  return content.map(el => {
+    if (el.type === 'h3') return `<h3>${esc(el.text)}</h3>`;
+    if (el.type === 'h4') return `<h4>${esc(el.text)}</h4>`;
+    if (el.type === 'embed') return `<div class="embed-ph">📊 [Embedded Resource: ${esc(el.text)}]</div>`;
+    if (el.type === 'image') return `<div class="img-ph">📸 ${esc(el.text)}</div>`;
+    if (el.type === 'table') return `<div class="table-ph">📊 ${esc(el.text)}</div>`;
+    if (el.type === 'list' || el.type === 'olist') {
+      const tag = el.type === 'olist' ? 'ol' : 'ul';
+      const items = el.items.map(item => {
+        const indent = item.level > 0 ? ` style="margin-left:${item.level * 16}px"` : '';
+        return `<li${indent}>${esc(item.text)}</li>`;
+      }).join('');
+      return `<${tag}>${items}</${tag}>`;
+    }
+    if (el.type === 'p') {
+      const t = el.text;
+      // Detect note/warning patterns
+      if (/^(please note|note:|important:|rise reserves|a portion or all)/i.test(t)) {
+        return `<div class="note">${esc(t)}</div>`;
+      }
+      if (/^(warning|do not|please do not|PLEASE DO NOT|if your b4b card is lost)/i.test(t)) {
+        return `<div class="warning">${esc(t)}</div>`;
+      }
+      return `<p>${esc(t)}</p>`;
+    }
+    return '';
+  }).join('');
+}
+
+function esc(str) {
+  return (str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ── State ──
+let CATS = [];
 
 // ── Build sidebar ──
 function buildSidebar() {
   const sb = document.getElementById('sidebar');
   let html = '<div class="sidebar-header">Contents</div>';
-  CATS.forEach(cat => {
-    html += `<button class="cat-btn" data-cat="${cat.id}" onclick="toggleCat('${cat.id}')">
-      <span>${cat.icon}</span> ${cat.title}
+  CATS.forEach((cat, ci) => {
+    html += `<button class="cat-btn" data-cat="c${ci}" onclick="toggleCat('c${ci}')">
+      <span>${getCatIcon(cat.title)}</span> ${esc(cat.title)}
       <span class="cat-chevron">▼</span>
     </button>
-    <div class="cat-sections" id="cat-${cat.id}">`;
-    cat.sections.forEach(sec => {
-      html += `<button class="sec-btn" id="nav-${sec.id}" onclick="showSection('${sec.id}')">${sec.title}</button>`;
+    <div class="cat-sections" id="cat-c${ci}">`;
+    cat.sections.forEach((sec, si) => {
+      html += `<button class="sec-btn" id="nav-c${ci}s${si}" onclick="showSection('c${ci}s${si}')">${esc(sec.title)}</button>`;
     });
     html += '</div>';
   });
   sb.innerHTML = html;
 }
 
-// ── Build content panels ──
+// ── Build panels ──
 function buildPanels() {
   const c = document.getElementById('hb-content');
-  // Home panel
   let homeHtml = `<div class="content-panel active" id="panel-home">
     <h2>How can we help you?</h2>
     <p style="color:var(--muted);font-size:14px;margin-bottom:24px;">Browse a section below or use the search bar to find specific information.</p>
     <div class="handbook-home">`;
-  CATS.forEach(cat => {
-    homeHtml += `<div class="cat-card" onclick="openCategory('${cat.id}')">
-      <div class="cat-card-icon">${cat.icon}</div>
-      <div class="cat-card-title">${cat.title}</div>
-      <div class="cat-card-desc">${cat.desc}</div>
+  CATS.forEach((cat, ci) => {
+    homeHtml += `<div class="cat-card" onclick="openCategory('c${ci}')">
+      <div class="cat-card-icon">${getCatIcon(cat.title)}</div>
+      <div class="cat-card-title">${esc(cat.title)}</div>
+      <div class="cat-card-desc">${getCatDesc(cat.title)}</div>
     </div>`;
   });
   homeHtml += '</div></div>';
-  // Section panels
+
   let secHtml = '';
-  CATS.forEach(cat => {
-    cat.sections.forEach(sec => {
-      secHtml += `<div class="content-panel" id="panel-${sec.id}">
-        <h2>${sec.title}</h2>
-        ${sec.html}
+  CATS.forEach((cat, ci) => {
+    cat.sections.forEach((sec, si) => {
+      secHtml += `<div class="content-panel" id="panel-c${ci}s${si}">
+        <h2>${esc(sec.title)}</h2>
+        ${renderContent(sec.content)}
       </div>`;
     });
   });
@@ -949,11 +285,21 @@ function buildPanels() {
 }
 
 // ── Navigation ──
+function showHome() {
+  document.querySelectorAll('.content-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.sec-btn').forEach(b => { b.classList.remove('active'); b.style.display = ''; });
+  document.querySelectorAll('.cat-btn').forEach(b => b.classList.remove('open'));
+  document.querySelectorAll('.cat-sections').forEach(s => s.classList.remove('open'));
+  const home = document.getElementById('panel-home');
+  if (home) home.classList.add('active');
+  document.getElementById('hb-search').value = '';
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
 function toggleCat(catId) {
   const btn = document.querySelector(`[data-cat="${catId}"]`);
   const sec = document.getElementById(`cat-${catId}`);
   const isOpen = btn.classList.contains('open');
-  // Close all
   document.querySelectorAll('.cat-btn').forEach(b => b.classList.remove('open'));
   document.querySelectorAll('.cat-sections').forEach(s => s.classList.remove('open'));
   if (!isOpen) { btn.classList.add('open'); sec.classList.add('open'); }
@@ -962,49 +308,61 @@ function toggleCat(catId) {
 function showSection(secId) {
   document.querySelectorAll('.content-panel').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.sec-btn').forEach(b => b.classList.remove('active'));
-  document.getElementById(`panel-${secId}`).classList.add('active');
+  const panel = document.getElementById(`panel-${secId}`);
   const navBtn = document.getElementById(`nav-${secId}`);
+  if (panel) panel.classList.add('active');
   if (navBtn) navBtn.classList.add('active');
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 function openCategory(catId) {
   toggleCat(catId);
-  const cat = CATS.find(c => c.id === catId);
-  if (cat && cat.sections.length > 0) showSection(cat.sections[0].id);
+  const idx = parseInt(catId.replace('c',''));
+  const cat = CATS[idx];
+  if (cat && cat.sections.length > 0) showSection(`${catId}s0`);
 }
 
 // ── Search ──
-document.addEventListener('DOMContentLoaded', () => {
-  buildSidebar();
-  buildPanels();
-
-  document.getElementById('hb-search').addEventListener('input', function() {
-    const q = this.value.trim().toLowerCase();
-    if (!q) {
-      // Restore home
-      document.querySelectorAll('.content-panel').forEach(p => p.classList.remove('active'));
-      document.getElementById('panel-home').classList.add('active');
-      document.querySelectorAll('.sec-btn').forEach(b => b.classList.remove('active'));
-      return;
-    }
-    // Find matches
-    let firstMatch = null;
-    CATS.forEach(cat => {
-      cat.sections.forEach(sec => {
-        const text = (sec.title + ' ' + sec.html).toLowerCase();
-        const navBtn = document.getElementById(`nav-${sec.id}`);
-        if (text.includes(q)) {
-          if (navBtn) navBtn.style.display = '';
-          if (!firstMatch) firstMatch = sec.id;
-        } else {
-          if (navBtn) navBtn.style.display = 'none';
-        }
-      });
+document.getElementById('hb-search').addEventListener('input', function() {
+  const q = this.value.trim().toLowerCase();
+  if (!q) { showHome(); return; }
+  let firstMatch = null;
+  CATS.forEach((cat, ci) => {
+    cat.sections.forEach((sec, si) => {
+      const text = (sec.title + ' ' + sec.content.map(e => e.text || (e.items||[]).map(i=>i.text).join(' ')).join(' ')).toLowerCase();
+      const id = `c${ci}s${si}`;
+      const navBtn = document.getElementById(`nav-${id}`);
+      if (text.includes(q)) {
+        if (navBtn) navBtn.style.display = '';
+        if (!firstMatch) firstMatch = id;
+      } else {
+        if (navBtn) navBtn.style.display = 'none';
+      }
     });
-    if (firstMatch) showSection(firstMatch);
   });
+  if (firstMatch) showSection(firstMatch);
 });
+
+// ── Fetch and init ──
+async function init() {
+  try {
+    const res = await fetch(API_URL + '?type=handbook');
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    CATS = data.categories || [];
+    buildSidebar();
+    buildPanels();
+  } catch(e) {
+    document.getElementById('sidebar').innerHTML = '<div class="sidebar-header">Contents</div>';
+    document.getElementById('hb-content').innerHTML = `
+      <div class="content-panel active">
+        <h2>Unable to load handbook</h2>
+        <div class="warning">Error: ${e.message}. Please try refreshing the page or contact your administrator.</div>
+      </div>`;
+  }
+}
+
+init();
 </script>
 </body>
 </html>
