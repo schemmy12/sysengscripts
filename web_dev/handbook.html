@@ -20,14 +20,10 @@ body{font-family:'Poppins',sans-serif;background:var(--off-white);color:var(--te
 .hero-inner{max-width:1100px;margin:0 auto;padding:0 20px;}
 .hero-nav{display:table;width:100%;table-layout:fixed;border-bottom:1px solid rgba(255,255,255,.08);position:relative;z-index:1;}
 .hero-nav-left{display:table-cell;width:20%;vertical-align:middle;padding:24px 16px;text-align:left;}
-.hero-nav-center{display:table-cell;width:60%;vertical-align:middle;padding:24px 0;text-align:center;}
-.hero-nav-right{display:table-cell;width:20%;vertical-align:middle;padding:24px 16px;text-align:right;}
+.hero-nav-right{display:table-cell;width:80%;vertical-align:middle;padding:24px 16px;text-align:right;}
 .hero-logo{display:inline-flex;align-items:center;text-decoration:none;}
 .logo-icon{width:120px;height:64px;flex-shrink:0;}
 .logo-icon svg{width:100%;height:100%;}
-.hero-nav-center a{color:#fff;font-size:17px;text-decoration:none;font-weight:500;font-family:'Poppins',sans-serif;letter-spacing:.2px;white-space:nowrap;margin:0 14px;transition:opacity .15s;}
-.hero-nav-center a:hover{opacity:.75;}
-.hero-nav-center a.active{border-bottom:2px solid var(--gold);padding-bottom:2px;}
 .hero-body{padding:24px 0 36px;position:relative;z-index:1;}
 .hero-title{font-size:42px;font-weight:800;color:var(--gold);font-family:'Poppins',sans-serif;line-height:1.1;font-style:italic;letter-spacing:-.5px;padding-left:16px;}
 
@@ -75,6 +71,18 @@ body{font-family:'Poppins',sans-serif;background:var(--off-white);color:var(--te
 .embed-ph{background:#eef3ff;border:2px dashed #b3c6f0;border-radius:8px;padding:20px;text-align:center;color:var(--bright-blue);font-size:13px;margin:14px 0;}
 .table-ph{background:#f0fff4;border:2px dashed #a3d9b0;border-radius:8px;padding:20px;text-align:center;color:#2d7a4a;font-size:13px;margin:14px 0;}
 
+/* ── University Cards ── */
+.uni-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin:20px 0;}
+.uni-card{background:#fff;border:1px solid var(--border);border-radius:10px;padding:20px;text-align:center;transition:all .15s;box-shadow:0 1px 4px rgba(0,0,0,.05);}
+.uni-card:hover{box-shadow:0 4px 16px rgba(0,0,0,.1);transform:translateY(-2px);}
+.uni-badge{width:64px;height:64px;border-radius:10px;background:#f8f9fa;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;margin:0 auto 12px;overflow:hidden;}
+.uni-badge img{width:100%;height:100%;object-fit:contain;padding:6px;}
+.uni-badge .uni-fallback{width:100%;height:100%;background:var(--navy);color:#fff;font-size:13px;font-weight:800;display:flex;align-items:center;justify-content:center;font-family:'Poppins',sans-serif;}
+.uni-name{font-size:13px;font-weight:700;color:var(--navy);margin-bottom:12px;line-height:1.4;}
+.uni-links{display:flex;flex-direction:column;gap:6px;}
+.uni-link{font-size:12px;color:var(--bright-blue);text-decoration:none;padding:5px 10px;border:1px solid var(--border);border-radius:6px;transition:all .15s;font-weight:500;}
+.uni-link:hover{background:var(--navy);color:#fff;border-color:var(--navy);}
+
 /* ── Home landing ── */
 .handbook-home{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;}
 .cat-card{background:#fff;border:1px solid var(--border);border-radius:10px;padding:20px;cursor:pointer;transition:all .15s;text-align:center;}
@@ -91,16 +99,15 @@ body{font-family:'Poppins',sans-serif;background:var(--off-white);color:var(--te
 @media(max-width:768px){
   .handbook-layout{flex-direction:column;}
   .sidebar{width:100%;position:static;max-height:none;}
-  .hero-nav-center{display:none;}
   .hero-title{font-size:34px;}
   .handbook-home{grid-template-columns:1fr 1fr;}
   .content-panel{padding:20px;}
+  .uni-grid{grid-template-columns:repeat(2,1fr);}
 }
 </style>
 </head>
 <body>
 
-<!-- ── Hero ── -->
 <div class="hero">
   <div class="hero-inner">
     <div class="hero-nav">
@@ -137,7 +144,6 @@ body{font-family:'Poppins',sans-serif;background:var(--off-white);color:var(--te
   </div>
 </div>
 
-<!-- ── Search ── -->
 <div class="search-wrap">
   <div class="search-inner">
     <div class="search-row">
@@ -147,7 +153,6 @@ body{font-family:'Poppins',sans-serif;background:var(--off-white);color:var(--te
   </div>
 </div>
 
-<!-- ── Layout ── -->
 <div class="handbook-layout">
   <aside class="sidebar" id="sidebar">
     <div class="sidebar-header">Contents</div>
@@ -163,28 +168,17 @@ body{font-family:'Poppins',sans-serif;background:var(--off-white);color:var(--te
 <script>
 const API_URL = "https://script.google.com/macros/s/AKfycbxWpy7prAGQ13eOeXIOZoUfIsZ_yynbAQar33rthMfnYs4J01fXnZknhdphSR1yMnuK/exec";
 
-// Icon map — matched by category title keyword
 const ICON_MAP = {
-  'getting started': '🏠',
-  'programming': '🌐',
-  'applying': '🎓',
-  'css': '📋',
-  'attending': '🏫',
-  'safeguarding': '🛡️',
-  'wellbeing': '🛡️',
-  'postgraduate': '🎯'
+  'getting started':'🏠','programming':'🌐','applying':'🎓',
+  'css':'📋','attending':'🏫','safeguarding':'🛡️','wellbeing':'🛡️','postgraduate':'🎯'
 };
-
-function getCatIcon(title) {
-  const t = title.toLowerCase();
-  for (const [key, icon] of Object.entries(ICON_MAP)) {
-    if (t.includes(key)) return icon;
-  }
+function getCatIcon(t) {
+  t = t.toLowerCase();
+  for (const [k,v] of Object.entries(ICON_MAP)) if (t.includes(k)) return v;
   return '📄';
 }
-
-function getCatDesc(title) {
-  const t = title.toLowerCase();
+function getCatDesc(t) {
+  t = t.toLowerCase();
   if (t.includes('getting')) return 'Benefits, code of conduct, funding, and program policies.';
   if (t.includes('programming')) return 'Community events, network building opportunities, and the Innovation Fund.';
   if (t.includes('applying')) return 'College advising, university partners, and financial aid guidance.';
@@ -195,39 +189,83 @@ function getCatDesc(title) {
   return '';
 }
 
+// ── University Partners ──
+const UNIVERSITIES = [
+  { name:'Ashesi University', abbr:'AU', site:'https://www.ashesi.edu.gh', factsheet:'', webinar:'' },
+  { name:'African Leadership University', abbr:'ALU', site:'https://www.alueducation.com', factsheet:'', webinar:'' },
+  { name:'Davidson College', abbr:'DC', site:'https://www.davidson.edu', factsheet:'', webinar:'' },
+  { name:'Durham University', abbr:'DU', site:'https://www.durham.ac.uk', factsheet:'', webinar:'' },
+  { name:'Imperial College London', abbr:'ICL', site:'https://www.imperial.ac.uk', factsheet:'', webinar:'' },
+  { name:'The University of Iowa', abbr:'UI', site:'https://www.uiowa.edu', factsheet:'', webinar:'' },
+  { name:'Lucy Cavendish College, Cambridge', abbr:'LCC', site:'https://www.lucy.cam.ac.uk', factsheet:'', webinar:'' },
+  { name:'Minerva University', abbr:'MU', site:'https://www.minerva.edu', factsheet:'', webinar:'' },
+  { name:'Northwestern University', abbr:'NU', site:'https://www.northwestern.edu', factsheet:'', webinar:'' },
+  { name:'NYU Abu Dhabi', abbr:'NYUAD', site:'https://nyuad.nyu.edu', factsheet:'', webinar:'' },
+  { name:'Skidmore College', abbr:'SC', site:'https://www.skidmore.edu', factsheet:'', webinar:'' },
+  { name:'Stanford University', abbr:'SU', site:'https://www.stanford.edu', factsheet:'', webinar:'' },
+  { name:'Tecnologico de Monterrey', abbr:'TEC', site:'https://www.tec.mx', factsheet:'', webinar:'' },
+  { name:'The University of Chicago', abbr:'UChic', site:'https://www.uchicago.edu', factsheet:'', webinar:'' },
+  { name:'The University of Edinburgh', abbr:'UE', site:'https://www.ed.ac.uk', factsheet:'', webinar:'' },
+  { name:'University of Notre Dame', abbr:'UND', site:'https://www.nd.edu', factsheet:'', webinar:'' },
+  { name:'The University of Queensland', abbr:'UQ', site:'https://www.uq.edu.au', factsheet:'', webinar:'' },
+  { name:'Vanderbilt University', abbr:'VU', site:'https://www.vanderbilt.edu', factsheet:'', webinar:'' },
+];
+
+function renderUniCards() {
+  return `<div class="uni-grid">${UNIVERSITIES.map(u => {
+    const domain = u.site.replace('https://www.','').replace('https://','').split('/')[0];
+    return `<div class="uni-card">
+      <div class="uni-badge">
+        <img src="https://www.google.com/s2/favicons?domain=${domain}&sz=64" alt="${u.name}"
+          onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" loading="lazy">
+        <div class="uni-fallback" style="display:none">${u.abbr}</div>
+      </div>
+      <div class="uni-name">${u.name}</div>
+      <div class="uni-links">
+        <a class="uni-link" href="${u.site}" target="_blank" rel="noopener">🌐 Visit Website</a>
+        ${u.factsheet ? `<a class="uni-link" href="${u.factsheet}" target="_blank" rel="noopener">📄 Factsheet</a>` : ''}
+        ${u.webinar ? `<a class="uni-link" href="${u.webinar}" target="_blank" rel="noopener">🎥 Webinar</a>` : ''}
+      </div>
+    </div>`;
+  }).join('')}</div>`;
+}
+
 // ── Content renderer ──
-function renderContent(content) {
+function esc(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function renderContent(content, secTitle) {
+  const isUniSection = secTitle && secTitle.includes('12.');
+  let uniRendered = false;
   return content.map(el => {
     if (el.type === 'h3') return `<h3>${esc(el.text)}</h3>`;
     if (el.type === 'h4') return `<h4>${esc(el.text)}</h4>`;
     if (el.type === 'embed') return `<div class="embed-ph">📊 [Embedded Resource: ${esc(el.text)}]</div>`;
     if (el.type === 'image') return `<div class="img-ph">📸 ${esc(el.text)}</div>`;
-    if (el.type === 'table') return `<div class="table-ph">📊 ${esc(el.text)}</div>`;
+    if (el.type === 'table') {
+      if (isUniSection) {
+        if (!uniRendered) { uniRendered = true; return renderUniCards(); }
+        return ''; // skip subsequent table placeholders in section 12
+      }
+      return `<div class="table-ph">📊 ${esc(el.text)}</div>`;
+    }
     if (el.type === 'list' || el.type === 'olist') {
       const tag = el.type === 'olist' ? 'ol' : 'ul';
       const items = el.items.map(item => {
-        const indent = item.level > 0 ? ` style="margin-left:${item.level * 16}px"` : '';
+        const indent = item.level > 0 ? ` style="margin-left:${item.level*16}px"` : '';
         return `<li${indent}>${esc(item.text)}</li>`;
       }).join('');
       return `<${tag}>${items}</${tag}>`;
     }
     if (el.type === 'p') {
       const t = el.text;
-      // Detect note/warning patterns
-      if (/^(please note|note:|important:|rise reserves|a portion or all)/i.test(t)) {
+      if (/^(please note|note:|important:|rise reserves|a portion or all)/i.test(t))
         return `<div class="note">${esc(t)}</div>`;
-      }
-      if (/^(warning|do not|please do not|PLEASE DO NOT|if your b4b card is lost)/i.test(t)) {
+      if (/^(warning|do not|please do not|PLEASE DO NOT|if your b4b card is lost)/i.test(t))
         return `<div class="warning">${esc(t)}</div>`;
-      }
       return `<p>${esc(t)}</p>`;
     }
     return '';
   }).join('');
-}
-
-function esc(str) {
-  return (str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
 // ── State ──
@@ -272,7 +310,7 @@ function buildPanels() {
     cat.sections.forEach((sec, si) => {
       secHtml += `<div class="content-panel" id="panel-c${ci}s${si}">
         <h2>${esc(sec.title)}</h2>
-        ${renderContent(sec.content)}
+        ${renderContent(sec.content, sec.title)}
       </div>`;
     });
   });
@@ -282,13 +320,13 @@ function buildPanels() {
 // ── Navigation ──
 function showHome() {
   document.querySelectorAll('.content-panel').forEach(p => p.classList.remove('active'));
-  document.querySelectorAll('.sec-btn').forEach(b => { b.classList.remove('active'); b.style.display = ''; });
+  document.querySelectorAll('.sec-btn').forEach(b => { b.classList.remove('active'); b.style.display=''; });
   document.querySelectorAll('.cat-btn').forEach(b => b.classList.remove('open'));
   document.querySelectorAll('.cat-sections').forEach(s => s.classList.remove('open'));
   const home = document.getElementById('panel-home');
   if (home) home.classList.add('active');
   document.getElementById('hb-search').value = '';
-  window.scrollTo({ top: 0, behavior: 'smooth' });
+  window.scrollTo({ top:0, behavior:'smooth' });
 }
 
 function toggleCat(catId) {
@@ -307,7 +345,7 @@ function showSection(secId) {
   const navBtn = document.getElementById(`nav-${secId}`);
   if (panel) panel.classList.add('active');
   if (navBtn) navBtn.classList.add('active');
-  window.scrollTo({ top: 0, behavior: 'smooth' });
+  window.scrollTo({ top:0, behavior:'smooth' });
 }
 
 function openCategory(catId) {
