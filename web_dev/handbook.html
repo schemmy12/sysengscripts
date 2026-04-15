@@ -160,7 +160,11 @@ body{font-family:'Poppins',sans-serif;background:var(--off-white);color:var(--te
   </aside>
   <main class="handbook-content" id="hb-content">
     <div class="content-panel active" id="panel-loading">
-      <div class="hb-loading"><div class="spinner"></div><p>Loading handbook…</p></div>
+      <div class="hb-loading">
+        <div class="spinner"></div>
+        <p style="font-weight:600;color:var(--navy);margin-bottom:8px;" id="loading-msg">Loading handbook…</p>
+        <p style="font-size:13px;color:var(--muted);">Fetching the latest content from the Rise Google Doc.<br>This usually takes 5–10 seconds.</p>
+      </div>
     </div>
   </main>
 </div>
@@ -377,15 +381,30 @@ document.getElementById('hb-search').addEventListener('input', function() {
 });
 
 // ── Fetch and init ──
+const loadingMsgs = [
+  'Fetching handbook content…',
+  'Reading the Google Doc…',
+  'Parsing sections…',
+  'Building navigation…',
+  'Almost ready…'
+];
 async function init() {
+  let msgIdx = 0;
+  const msgEl = document.getElementById('loading-msg');
+  const msgTimer = setInterval(() => {
+    msgIdx = Math.min(msgIdx + 1, loadingMsgs.length - 1);
+    if (msgEl) msgEl.textContent = loadingMsgs[msgIdx];
+  }, 2000);
   try {
     const res = await fetch(API_URL + '?type=handbook');
     const data = await res.json();
     if (data.error) throw new Error(data.error);
+    clearInterval(msgTimer);
     CATS = data.categories || [];
     buildSidebar();
     buildPanels();
   } catch(e) {
+    clearInterval(msgTimer);
     document.getElementById('sidebar').innerHTML = '<div class="sidebar-header">Contents</div>';
     document.getElementById('hb-content').innerHTML = `
       <div class="content-panel active">
