@@ -71,6 +71,27 @@ body{font-family:'Poppins',sans-serif;background:var(--off-white);color:var(--te
 .embed-ph{background:#eef3ff;border:2px dashed #b3c6f0;border-radius:8px;padding:20px;text-align:center;color:var(--bright-blue);font-size:13px;margin:14px 0;}
 .table-ph{background:#f0fff4;border:2px dashed #a3d9b0;border-radius:8px;padding:20px;text-align:center;color:#2d7a4a;font-size:13px;margin:14px 0;}
 
+/* ── Real tables (parsed from Doc) ── */
+.hb-table-wrap{margin:16px 0;overflow-x:auto;border:1px solid var(--border);border-radius:8px;}
+.hb-table{width:100%;border-collapse:collapse;font-size:13px;}
+.hb-table th,.hb-table td{padding:10px 14px;text-align:left;border-bottom:1px solid var(--border);vertical-align:top;line-height:1.6;}
+.hb-table th{background:var(--navy);color:#fff;font-weight:600;font-size:12px;letter-spacing:.3px;text-transform:uppercase;white-space:nowrap;}
+.hb-table tr:nth-child(even) td{background:#fafbfc;}
+.hb-table tr:last-child td{border-bottom:none;}
+.hb-table a{color:var(--bright-blue);text-decoration:none;word-break:break-word;}
+.hb-table a:hover{text-decoration:underline;}
+
+/* ── Real embeds (iframe) ── */
+.hb-embed{margin:16px 0;border:1px solid var(--border);border-radius:8px;overflow:hidden;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.05);}
+.hb-embed-frame{position:relative;width:100%;background:#f8f9fa;}
+.hb-embed-frame.slides,.hb-embed-frame.youtube,.hb-embed-frame.vimeo,.hb-embed-frame.loom{padding-bottom:56.25%;} /* 16:9 */
+.hb-embed-frame.doc,.hb-embed-frame.sheet,.hb-embed-frame.form{padding-bottom:75%;}                              /* 4:3 */
+.hb-embed-frame.other{padding-bottom:60%;}
+.hb-embed-frame iframe{position:absolute;inset:0;width:100%;height:100%;border:0;}
+.hb-embed-footer{padding:8px 14px;font-size:12px;color:var(--muted);border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:12px;}
+.hb-embed-footer a{color:var(--bright-blue);text-decoration:none;font-weight:500;}
+.hb-embed-footer a:hover{text-decoration:underline;}
+
 /* ── University Cards ── */
 .uni-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin:20px 0;}
 .uni-card{background:#fff;border:1px solid var(--border);border-radius:10px;padding:20px;text-align:center;transition:all .15s;box-shadow:0 1px 4px rgba(0,0,0,.05);}
@@ -218,6 +239,23 @@ function renderUniCards() {
 
 // ── Content renderer ──
 function esc(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+// Strip leading section numbers from titles for display only
+// (e.g. "1. Getting Started" -> "Getting Started", "2.1 Community Events" -> "Community Events")
+// The Google Doc keeps the numbers so the Apps Script parser still works correctly.
+function stripNum(s) { return (s||'').replace(/^\s*\d+(?:\.\d+)*\.?\s+/, ''); }
+// Auto-link URLs and emails in already-escaped text. Run AFTER esc(), never before.
+// URL regex matches http(s)://... up to whitespace or common trailing punctuation.
+// Email regex is intentionally loose to catch typical addresses.
+function autoLink(escapedText) {
+  if (!escapedText) return '';
+  return escapedText
+    // Skip strings already inside an existing <a ...>...</a> by processing in two passes:
+    // first URLs, then emails. Trailing .,;:!? are stripped from the linked text.
+    .replace(/(https?:\/\/[^\s<]+?)([.,;:!?)\]]?)(?=\s|$|<)/g,
+      '<a href="$1" target="_blank" rel="noopener">$1</a>$2')
+    .replace(/(?<![\w.@])([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})(?![\w.@])/g,
+      '<a href="mailto:$1">$1</a>');
+}
 
 function renderContent(content, secTitle) {
   const isUniSection = secTitle && secTitle.includes('12.');
@@ -225,30 +263,56 @@ function renderContent(content, secTitle) {
   return content.map(el => {
     if (el.type === 'h3') return `<h3>${esc(el.text)}</h3>`;
     if (el.type === 'h4') return `<h4>${esc(el.text)}</h4>`;
-    if (el.type === 'embed') return `<div class="embed-ph">📊 [Embedded Resource: ${esc(el.text)}]</div>`;
+    if (el.type === 'embed') {
+      // New: parser extracted a real embed URL → render as iframe
+      if (el.url) {
+        const kind = esc(el.kind || 'other');
+        return `<div class="hb-embed">
+          <div class="hb-embed-frame ${kind}">
+            <iframe src="${esc(el.url)}" allowfullscreen loading="lazy"></iframe>
+          </div>
+          <div class="hb-embed-footer">
+            <span>Embedded ${kind}</span>
+            <a href="${esc(el.url)}" target="_blank" rel="noopener">Open in new tab →</a>
+          </div>
+        </div>`;
+      }
+      // Fallback: embed detected by text marker but no URL found
+      return `<div class="embed-ph">📊 [Embedded Resource: ${esc(el.text)}]</div>`;
+    }
     if (el.type === 'image') return `<div class="img-ph">📸 ${esc(el.text)}</div>`;
     if (el.type === 'table') {
       if (isUniSection) {
         if (!uniRendered) { uniRendered = true; return renderUniCards(); }
         return ''; // skip subsequent table placeholders in section 12
       }
-      return `<div class="table-ph">📊 ${esc(el.text)}</div>`;
+      // New: parser returned actual rows → render real table
+      if (el.rows && el.rows.length) {
+        const [headerRow, ...bodyRows] = el.rows;
+        const thead = `<thead><tr>${headerRow.map(c => `<th>${autoLink(esc(c))}</th>`).join('')}</tr></thead>`;
+        const tbody = bodyRows.length
+          ? `<tbody>${bodyRows.map(r => `<tr>${r.map(c => `<td>${autoLink(esc(c))}</td>`).join('')}</tr>`).join('')}</tbody>`
+          : '';
+        return `<div class="hb-table-wrap"><table class="hb-table">${thead}${tbody}</table></div>`;
+      }
+      // Fallback for tables that failed to parse
+      return `<div class="table-ph">📊 ${esc(el.text || 'Table')}</div>`;
     }
     if (el.type === 'list' || el.type === 'olist') {
       const tag = el.type === 'olist' ? 'ol' : 'ul';
       const items = el.items.map(item => {
         const indent = item.level > 0 ? ` style="margin-left:${item.level*16}px"` : '';
-        return `<li${indent}>${esc(item.text)}</li>`;
+        return `<li${indent}>${autoLink(esc(item.text))}</li>`;
       }).join('');
       return `<${tag}>${items}</${tag}>`;
     }
     if (el.type === 'p') {
       const t = el.text;
       if (/^(please note|note:|important:|rise reserves|a portion or all)/i.test(t))
-        return `<div class="note">${esc(t)}</div>`;
+        return `<div class="note">${autoLink(esc(t))}</div>`;
       if (/^(warning|do not|please do not|PLEASE DO NOT|if your b4b card is lost)/i.test(t))
-        return `<div class="warning">${esc(t)}</div>`;
-      return `<p>${esc(t)}</p>`;
+        return `<div class="warning">${autoLink(esc(t))}</div>`;
+      return `<p>${autoLink(esc(t))}</p>`;
     }
     return '';
   }).join('');
@@ -263,12 +327,12 @@ function buildSidebar() {
   let html = '<div class="sidebar-header">Contents</div>';
   CATS.forEach((cat, ci) => {
     html += `<button class="cat-btn" data-cat="c${ci}" onclick="toggleCat('c${ci}')">
-      <span>${getCatIcon(cat.title)}</span> ${esc(cat.title)}
+      <span>${getCatIcon(cat.title)}</span> ${esc(stripNum(cat.title))}
       <span class="cat-chevron">▼</span>
     </button>
     <div class="cat-sections" id="cat-c${ci}">`;
     cat.sections.forEach((sec, si) => {
-      html += `<button class="sec-btn" id="nav-c${ci}s${si}" onclick="showSection('c${ci}s${si}')">${esc(sec.title)}</button>`;
+      html += `<button class="sec-btn" id="nav-c${ci}s${si}" onclick="showSection('c${ci}s${si}')">${esc(stripNum(sec.title))}</button>`;
     });
     html += '</div>';
   });
@@ -285,7 +349,7 @@ function buildPanels() {
   CATS.forEach((cat, ci) => {
     homeHtml += `<div class="cat-card" onclick="openCategory('c${ci}')">
       <div class="cat-card-icon">${getCatIcon(cat.title)}</div>
-      <div class="cat-card-title">${esc(cat.title)}</div>
+      <div class="cat-card-title">${esc(stripNum(cat.title))}</div>
       <div class="cat-card-desc">${getCatDesc(cat.title)}</div>
     </div>`;
   });
@@ -295,7 +359,7 @@ function buildPanels() {
   CATS.forEach((cat, ci) => {
     cat.sections.forEach((sec, si) => {
       secHtml += `<div class="content-panel" id="panel-c${ci}s${si}">
-        <h2>${esc(sec.title)}</h2>
+        <h2>${esc(stripNum(sec.title))}</h2>
         ${renderContent(sec.content, sec.title)}
       </div>`;
     });

@@ -121,6 +121,16 @@
   .modal-row { display: flex; align-items: flex-start; gap: 10px; font-size: 14px; color: var(--text); margin-bottom: 10px; }
   .modal-row svg { color: var(--navy); flex-shrink: 0; margin-top: 2px; }
   .modal-desc { font-size: 14px; line-height: 1.7; color: var(--text); margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); }
+  .modal-desc h2, .modal-desc h3 { color: var(--navy); margin: 14px 0 8px; line-height: 1.3; }
+  .modal-desc h2 { font-size: 16px; font-weight: 700; }
+  .modal-desc h3 { font-size: 15px; font-weight: 700; }
+  .modal-desc p { margin-bottom: 10px; }
+  .modal-desc p:last-child { margin-bottom: 0; }
+  .modal-desc a { color: var(--bright-blue); text-decoration: none; font-weight: 500; word-break: break-word; }
+  .modal-desc a:hover { text-decoration: underline; }
+  .modal-desc strong { font-weight: 600; color: var(--navy); }
+  .modal-desc ul, .modal-desc ol { padding-left: 22px; margin-bottom: 10px; }
+  .modal-desc li { margin-bottom: 4px; }
   .modal-link { display: inline-block; margin-top: 16px; background: var(--gold); color: var(--navy); font-size: 13px; font-weight: 700; text-decoration: none; padding: 10px 20px; border-radius: 6px; }
   .modal-link:hover { background: #e8b800; }
   .close-btn { position: absolute; top: 14px; right: 16px; background: none; border: none; font-size: 20px; cursor: pointer; color: var(--muted); }
@@ -188,7 +198,6 @@ const API_URL = "https://script.google.com/macros/s/AKfycbxWpy7prAGQ13eOeXIOZoUf
 <div class="overlay" id="overlay">
   <div class="modal">
     <button class="close-btn" id="closeBtn">✕</button>
-    <div id="m-tag"></div>
     <div class="modal-title" id="m-title"></div>
     <div class="modal-row" id="m-date">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
@@ -228,6 +237,39 @@ function eventsForDay(y, m, d) {
   });
 }
 
+// ── Minimal markdown → HTML renderer for event descriptions ──
+function escHtml(s) {
+  return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function renderMarkdown(text) {
+  if (!text) return '';
+  let html = escHtml(text);
+  // Headings (before inline replacements)
+  html = html.replace(/^###\s+(.+)$/gm, '<h3>$1</h3>');
+  html = html.replace(/^##\s+(.+)$/gm,  '<h2>$1</h2>');
+  // Links [text](url)
+  html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+  // Bold **text**
+  html = html.replace(/\*\*([^*]+?)\*\*/g, '<strong>$1</strong>');
+  // Simple bullet lists (consecutive lines beginning with "- " or "* ")
+  html = html.replace(/(?:^[\-\*]\s+.+(?:\n|$))+/gm, function(block) {
+    const items = block.trim().split('\n')
+      .map(l => '<li>' + l.replace(/^[\-\*]\s+/, '') + '</li>')
+      .join('');
+    return '<ul>' + items + '</ul>';
+  });
+  // Paragraph breaks — split on blank lines, preserve inline line breaks
+  const blocks = html.split(/\n{2,}/);
+  html = blocks.map(b => {
+    const t = b.trim();
+    if (!t) return '';
+    // Don't wrap blocks that are already block-level HTML
+    if (/^<(h[1-6]|ul|ol|div|p|blockquote|pre)\b/i.test(t)) return t;
+    return '<p>' + t.replace(/\n/g, '<br>') + '</p>';
+  }).join('');
+  return html;
+}
+
 function renderCalendar() {
   const today = new Date();
   document.getElementById("cal-month").textContent = `${MONTHS[viewMonth]} ${viewYear}`;
@@ -258,9 +300,6 @@ function renderCalendar() {
 }
 
 function openModal(ev) {
-  const tc = typeClass(ev.type);
-  const tags = [ev.type, ev.category].filter(Boolean);
-  document.getElementById("m-tag").innerHTML = tags.map(t=>`<div class="modal-tag ${typeClass(t)}" style="margin-right:6px;display:inline-block">${t}</div>`).join("");
   document.getElementById("m-title").textContent = ev.name;
   let dateStr = formatDate(ev.date);
   if (ev.endDate&&ev.endDate!==ev.date) dateStr+=` – ${formatDate(ev.endDate)}`;
@@ -272,8 +311,9 @@ function openModal(ev) {
   else locRow.style.display="none";
   const statusEl = document.getElementById("m-status");
   if (ev.status) { statusEl.textContent=`Status: ${ev.status}`; statusEl.style.display="block"; } else statusEl.style.display="none";
-  document.getElementById("m-desc").textContent = ev.description||"";
-  document.getElementById("m-desc").style.display = ev.description?"block":"none";
+  const descEl = document.getElementById("m-desc");
+  descEl.innerHTML = renderMarkdown(ev.description);
+  descEl.style.display = ev.description ? "block" : "none";
   document.getElementById("m-link").innerHTML = ev.link?`<a class="modal-link" href="${ev.link}" target="_blank" rel="noopener">Register / Learn More →</a>`:"";
   document.getElementById("overlay").classList.add("open");
   document.body.style.overflow="hidden";
