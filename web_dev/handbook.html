@@ -247,11 +247,47 @@ function renderUniCards() {
 }
 
 // ── Content renderer ──
-function esc(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function toText(value) {
+  if (value == null) return '';
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  if (Array.isArray(value)) return value.map(toText).filter(Boolean).join(' ');
+  if (typeof value === 'object') {
+    for (const key of ['text', 'displayText', 'label', 'title', 'name', 'value']) {
+      if (value[key] != null) return toText(value[key]);
+    }
+    if (value.url || value.href || value.linkUrl) return toText(value.url || value.href || value.linkUrl);
+    if (Array.isArray(value.runs)) return value.runs.map(toText).join('');
+    if (Array.isArray(value.links)) return value.links.map(link => toText(link.text || link.url || link.href || link.linkUrl)).filter(Boolean).join(' ');
+  }
+  return String(value);
+}
+function getUrls(value) {
+  const urls = [];
+  const addUrls = v => {
+    const text = toText(v);
+    const matches = text.match(/https?:\/\/[^\s<>"']+/gi) || [];
+    matches.forEach(url => urls.push(stripUrlPunctuation(url)));
+  };
+  const walk = v => {
+    if (v == null) return;
+    if (typeof v === 'string') { addUrls(v); return; }
+    if (Array.isArray(v)) { v.forEach(walk); return; }
+    if (typeof v === 'object') {
+      ['url', 'href', 'linkUrl'].forEach(key => { if (v[key]) addUrls(v[key]); });
+      ['text', 'displayText', 'label', 'title', 'name', 'value'].forEach(key => { if (v[key]) walk(v[key]); });
+      if (Array.isArray(v.runs)) walk(v.runs);
+      if (Array.isArray(v.links)) walk(v.links);
+    }
+  };
+  walk(value);
+  return [...new Set(urls)];
+}
+function esc(s) { return toText(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 // Strip leading section numbers from titles for display only
 // (e.g. "1. Getting Started" -> "Getting Started", "2.1 Community Events" -> "Community Events")
 // The Google Doc keeps the numbers so the Apps Script parser still works correctly.
-function stripNum(s) { return (s||'').replace(/^\s*\d+(?:\.\d+)*\.?\s+/, ''); }
+function stripNum(s) { return toText(s).replace(/^\s*\d+(?:\.\d+)*\.?\s+/, ''); }
 // Auto-link URLs and emails in already-escaped text. Run AFTER esc(), never before.
 // URL regex matches http(s)://... up to whitespace or common trailing punctuation.
 // Email regex is intentionally loose to catch typical addresses.
@@ -266,9 +302,9 @@ function autoLink(escapedText) {
       '<a href="mailto:$1">$1</a>');
 }
 function escAttr(s) { return esc(s).replace(/"/g, '&quot;'); }
-function stripUrlPunctuation(url) { return (url || '').replace(/[.,;:!?)\]]+$/, ''); }
+function stripUrlPunctuation(url) { return toText(url).replace(/[.,;:!?)\]]+$/, ''); }
 function getSingleUrl(s) {
-  const text = (s || '').trim();
+  const text = toText(s).trim();
   const matches = text.match(/https?:\/\/[^\s<>"']+/gi) || [];
   if (matches.length !== 1) return null;
   const url = stripUrlPunctuation(matches[0]);
@@ -325,10 +361,20 @@ function getGoogleEmbed(urlText) {
 
   return null;
 }
+function renderInlineCell(cell) {
+  const text = toText(cell);
+  const urls = getUrls(cell);
+  if (urls.length === 1 && text && !text.includes(urls[0])) {
+    return `<a href="${escAttr(urls[0])}" target="_blank" rel="noopener">${esc(text)}</a>`;
+  }
+  if (!text && urls.length) return autoLink(esc(urls.join(' ')));
+  return autoLink(esc(text));
+}
 function renderTableCell(cell) {
-  const singleUrl = getSingleUrl(cell);
+  const urls = getUrls(cell);
+  const singleUrl = urls.length === 1 ? urls[0] : getSingleUrl(cell);
   const embed = singleUrl ? getGoogleEmbed(singleUrl) : null;
-  if (!embed) return `<td>${autoLink(esc(cell))}</td>`;
+  if (!embed) return `<td>${renderInlineCell(cell)}</td>`;
   return `<td class="has-embed">
     <div class="hb-table-embed">
       <div class="hb-table-embed-frame">
@@ -337,6 +383,13 @@ function renderTableCell(cell) {
     </div>
     <a class="hb-table-embed-link" href="${escAttr(embed.original)}" target="_blank" rel="noopener">Open in new tab</a>
   </td>`;
+}
+function getContentText(el) {
+  if (!el) return '';
+  const parts = [el.text, el.url];
+  if (el.items) parts.push(el.items.map(item => `${toText(item.text)} ${getUrls(item.text).join(' ')}`));
+  if (el.rows) parts.push(el.rows.flat().map(cell => `${toText(cell)} ${getUrls(cell).join(' ')}`));
+  return parts.map(toText).filter(Boolean).join(' ');
 }
 
 function renderContent(content, secTitle) {
@@ -373,7 +426,7 @@ function renderContent(content, secTitle) {
       // New: parser returned actual rows → render real table
       if (el.rows && el.rows.length) {
         const [headerRow, ...bodyRows] = el.rows;
-        const thead = `<thead><tr>${headerRow.map(c => `<th>${autoLink(esc(c))}</th>`).join('')}</tr></thead>`;
+        const thead = `<thead><tr>${headerRow.map(c => `<th>${renderInlineCell(c)}</th>`).join('')}</tr></thead>`;
         const tbody = bodyRows.length
           ? `<tbody>${bodyRows.map(r => `<tr>${r.map(c => renderTableCell(c)).join('')}</tr>`).join('')}</tbody>`
           : '';
@@ -496,7 +549,7 @@ document.getElementById('hb-search').addEventListener('input', function() {
   let firstMatch = null;
   CATS.forEach((cat, ci) => {
     cat.sections.forEach((sec, si) => {
-      const text = (sec.title + ' ' + sec.content.map(e => e.text || (e.items||[]).map(i=>i.text).join(' ')).join(' ')).toLowerCase();
+      const text = `${toText(sec.title)} ${sec.content.map(getContentText).join(' ')}`.toLowerCase();
       const id = `c${ci}s${si}`;
       const navBtn = document.getElementById(`nav-${id}`);
       if (text.includes(q)) {
