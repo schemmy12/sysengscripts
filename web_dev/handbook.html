@@ -83,9 +83,13 @@ body{font-family:'Poppins',sans-serif;background:var(--off-white);color:var(--te
 
 /* ── Real embeds (iframe) ── */
 .hb-embed{margin:16px 0;border:1px solid var(--border);border-radius:8px;overflow:hidden;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.05);}
+.hb-embed.hb-embed-video{max-width:640px;} /* keep videos from dominating the page */
 .hb-embed-frame{position:relative;width:100%;background:#f8f9fa;}
-.hb-embed-frame.slides,.hb-embed-frame.youtube,.hb-embed-frame.vimeo,.hb-embed-frame.loom{padding-bottom:56.25%;} /* 16:9 */
+.hb-embed-frame.slides,.hb-embed-frame.youtube,.hb-embed-frame.vimeo,.hb-embed-frame.loom,.hb-embed-frame.drive-video{padding-bottom:56.25%;} /* 16:9 for video content */
 .hb-embed-frame.doc,.hb-embed-frame.sheet,.hb-embed-frame.form{padding-bottom:75%;}                              /* 4:3 */
+.hb-embed-frame.drive-pdf,.hb-embed-frame.drive{padding-bottom:129%;}                                             /* 8.5:11 letter portrait for PDFs */
+.hb-embed-frame.drive-image{padding-bottom:75%;}                                                                   /* 4:3 for images — Drive viewer centers and lets them fit */
+.hb-embed-frame.airtable{padding-bottom:75%;}                                                                      /* 4:3 — Airtable embeds scroll internally */
 .hb-embed-frame.other{padding-bottom:60%;}
 .hb-embed-frame iframe{position:absolute;inset:0;width:100%;height:100%;border:0;}
 .hb-embed-footer{padding:8px 14px;font-size:12px;color:var(--muted);border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:12px;}
@@ -173,7 +177,7 @@ body{font-family:'Poppins',sans-serif;background:var(--off-white);color:var(--te
 </div>
 
 <script>
-const API_URL = "https://script.google.com/macros/s/AKfycbxWpy7prAGQ13eOeXIOZoUfIsZ_yynbAQar33rthMfnYs4J01fXnZknhdphSR1yMnuK/exec";
+const API_URL = "https://script.google.com/macros/s/AKfycbwDMZzrahIhHwlEcciQ4TcEOHOdih5h7Sy-Wg-uVfiSS_gNvZeGXr42TkK3RoS6MRm9Cg/exec";
 
 const ICON_MAP = {
   'getting started':'🏠','programming':'🌐','applying':'🎓',
@@ -267,12 +271,14 @@ function renderContent(content, secTitle) {
       // New: parser extracted a real embed URL → render as iframe
       if (el.url) {
         const kind = esc(el.kind || 'other');
-        return `<div class="hb-embed">
+        const isVideo = /^(drive-video|youtube|vimeo|loom)$/.test(kind);
+        const wrapperCls = isVideo ? 'hb-embed hb-embed-video' : 'hb-embed';
+        return `<div class="${wrapperCls}">
           <div class="hb-embed-frame ${kind}">
             <iframe src="${esc(el.url)}" allowfullscreen loading="lazy"></iframe>
           </div>
           <div class="hb-embed-footer">
-            <span>Embedded ${kind}</span>
+            <span>Embedded ${kind.replace('-', ' ')}</span>
             <a href="${esc(el.url)}" target="_blank" rel="noopener">Open in new tab →</a>
           </div>
         </div>`;
