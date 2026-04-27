@@ -80,6 +80,11 @@ body{font-family:'Poppins',sans-serif;background:var(--off-white);color:var(--te
 .hb-table tr:last-child td{border-bottom:none;}
 .hb-table a{color:var(--bright-blue);text-decoration:none;word-break:break-word;}
 .hb-table a:hover{text-decoration:underline;}
+.hb-table td.has-embed{min-width:260px;}
+.hb-table-embed{border:1px solid var(--border);border-radius:6px;overflow:hidden;background:#f8f9fa;}
+.hb-table-embed-frame{position:relative;width:100%;aspect-ratio:16/9;}
+.hb-table-embed-frame iframe{position:absolute;inset:0;width:100%;height:100%;border:0;}
+.hb-table-embed-link{display:block;margin-top:7px;font-size:12px;font-weight:500;}
 
 /* ── Real embeds (iframe) ── */
 .hb-embed{margin:16px 0;border:1px solid var(--border);border-radius:8px;overflow:hidden;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.05);}
@@ -260,6 +265,79 @@ function autoLink(escapedText) {
     .replace(/(?<![\w.@])([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})(?![\w.@])/g,
       '<a href="mailto:$1">$1</a>');
 }
+function escAttr(s) { return esc(s).replace(/"/g, '&quot;'); }
+function stripUrlPunctuation(url) { return (url || '').replace(/[.,;:!?)\]]+$/, ''); }
+function getSingleUrl(s) {
+  const text = (s || '').trim();
+  const matches = text.match(/https?:\/\/[^\s<>"']+/gi) || [];
+  if (matches.length !== 1) return null;
+  const url = stripUrlPunctuation(matches[0]);
+  const rest = text.replace(matches[0], '').trim();
+  return rest ? null : url;
+}
+function getGoogleEmbed(urlText) {
+  let url;
+  try { url = new URL(urlText); } catch(e) { return null; }
+  const host = url.hostname.toLowerCase().replace(/^www\./, '');
+  const path = url.pathname;
+
+  if (host === 'drive.google.com') {
+    const fileMatch = path.match(/\/file\/d\/([^/]+)/);
+    const id = fileMatch ? fileMatch[1] : url.searchParams.get('id');
+    if (id) {
+      return {
+        src: `https://drive.google.com/file/d/${encodeURIComponent(id)}/preview`,
+        original: urlText,
+        label: 'Google Drive preview'
+      };
+    }
+  }
+
+  if (host === 'docs.google.com') {
+    const docMatch = path.match(/^\/(document|spreadsheets|presentation)\/d\/([^/]+)/);
+    if (docMatch) {
+      const [, app, id] = docMatch;
+      if (app === 'presentation') {
+        return {
+          src: `https://docs.google.com/presentation/d/${encodeURIComponent(id)}/embed?start=false&loop=false&delayms=3000`,
+          original: urlText,
+          label: 'Google Slides preview'
+        };
+      }
+      return {
+        src: `https://docs.google.com/${app}/d/${encodeURIComponent(id)}/preview`,
+        original: urlText,
+        label: app === 'spreadsheets' ? 'Google Sheets preview' : 'Google Docs preview'
+      };
+    }
+
+    const formMatch = path.match(/^\/forms\/d\/(e\/)?([^/]+)/);
+    if (formMatch) {
+      const prefix = formMatch[1] ? 'e/' : '';
+      const id = formMatch[2];
+      return {
+        src: `https://docs.google.com/forms/d/${prefix}${encodeURIComponent(id)}/viewform?embedded=true`,
+        original: urlText,
+        label: 'Google Forms preview'
+      };
+    }
+  }
+
+  return null;
+}
+function renderTableCell(cell) {
+  const singleUrl = getSingleUrl(cell);
+  const embed = singleUrl ? getGoogleEmbed(singleUrl) : null;
+  if (!embed) return `<td>${autoLink(esc(cell))}</td>`;
+  return `<td class="has-embed">
+    <div class="hb-table-embed">
+      <div class="hb-table-embed-frame">
+        <iframe src="${escAttr(embed.src)}" title="${escAttr(embed.label)}" allowfullscreen loading="lazy"></iframe>
+      </div>
+    </div>
+    <a class="hb-table-embed-link" href="${escAttr(embed.original)}" target="_blank" rel="noopener">Open in new tab</a>
+  </td>`;
+}
 
 function renderContent(content, secTitle) {
   const isUniSection = secTitle && secTitle.includes('12.');
@@ -297,7 +375,7 @@ function renderContent(content, secTitle) {
         const [headerRow, ...bodyRows] = el.rows;
         const thead = `<thead><tr>${headerRow.map(c => `<th>${autoLink(esc(c))}</th>`).join('')}</tr></thead>`;
         const tbody = bodyRows.length
-          ? `<tbody>${bodyRows.map(r => `<tr>${r.map(c => `<td>${autoLink(esc(c))}</td>`).join('')}</tr>`).join('')}</tbody>`
+          ? `<tbody>${bodyRows.map(r => `<tr>${r.map(c => renderTableCell(c)).join('')}</tr>`).join('')}</tbody>`
           : '';
         return `<div class="hb-table-wrap"><table class="hb-table">${thead}${tbody}</table></div>`;
       }
