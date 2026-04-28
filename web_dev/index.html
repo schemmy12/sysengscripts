@@ -218,7 +218,7 @@ const PAGE_SIZE = 20;
   <div class="toolbar">
     <div class="search-row">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-      <input id="search" type="text" placeholder="Search by Name, Cohort Year, Current Location, Countries Represented…">
+      <input id="search" type="text" placeholder="Search by Name, Cohort Year, Current Location, Countries Represented, University…">
     </div>
     <div class="filter-row">
       <div class="filter-wrap">
@@ -234,6 +234,11 @@ const PAGE_SIZE = 20;
       <div class="filter-wrap">
         <svg class="filter-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 010 20M12 2a15.3 15.3 0 000 20"/></svg>
         <select id="f-country"><option value="">Countries Represented</option></select>
+        <svg class="chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+      </div>
+      <div class="filter-wrap">
+        <svg class="filter-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18"/><path d="M6 21V7l6-4 6 4v14"/><path d="M9 21v-6h6v6"/><path d="M9 10h.01"/><path d="M12 10h.01"/><path d="M15 10h.01"/></svg>
+        <select id="f-university"><option value="">University</option></select>
         <svg class="chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
       </div>
     </div>
@@ -263,6 +268,7 @@ const PAGE_SIZE = 20;
       <div class="modal-bio" id="m-bio"></div>
       <div class="modal-field" id="m-represented"></div>
       <div class="modal-field" id="m-home"></div>
+      <div class="modal-field" id="m-university"></div>
       <div class="modal-field" id="m-pronouns"></div>
       <div class="modal-field" id="m-linkedin"></div>
     </div>
@@ -317,6 +323,40 @@ function photoImg(url, cls, phCls, name) {
 }
 
 let allPeople = [], filtered = [], currentPage = 1;
+const UNIVERSITY_FIELDS = [
+  "university", "University",
+  "universityName", "University Name",
+  "institution", "Institution",
+  "undergraduateInstitution", "Undergraduate Institution", "Undergraduate Institution(s)",
+  "undergraduateInstitutionName", "undergraduate_institution",
+  "undergraduate", "Undergraduate",
+  "higherEdInstitution", "Higher Ed Institution", "Higher Education Institution",
+  "college", "College", "school", "School"
+];
+
+function fieldText(value) {
+  if (value == null) return "";
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") return String(value).trim();
+  if (Array.isArray(value)) return value.map(fieldText).filter(Boolean).join(", ");
+  if (typeof value === "object") {
+    for (const key of ["name", "text", "label", "title", "value"]) {
+      if (value[key] != null) return fieldText(value[key]);
+    }
+  }
+  return "";
+}
+function fieldValues(value) {
+  if (Array.isArray(value)) return value.map(fieldText).filter(text => text && !looksLikeAirtableIds(text));
+  const text = fieldText(value);
+  return text && !looksLikeAirtableIds(text) ? [text] : [];
+}
+function looksLikeAirtableIds(text) {
+  return /^rec[A-Za-z0-9]+(?:\s*,\s*rec[A-Za-z0-9]+)*$/.test(text);
+}
+function getUniversities(person) {
+  const values = UNIVERSITY_FIELDS.flatMap(field => fieldValues(person[field]));
+  return [...new Set(values)].sort((a,b) => a.localeCompare(b));
+}
 
 function populateFilter(id, values) {
   const sel = document.getElementById(id);
@@ -333,18 +373,23 @@ function buildFilters(people) {
   populateFilter("f-location", people.map(p => p.country));
   populateFilter("f-country",  people.map(p => p.countries));
   populateFilter("f-year",     people.map(p => String(p.year)));
+  populateFilter("f-university", people.flatMap(getUniversities));
 }
 function applyFilters() {
   const q   = document.getElementById("search").value.toLowerCase();
   const loc = document.getElementById("f-location").value;
   const cty = document.getElementById("f-country").value;
   const yr  = document.getElementById("f-year").value;
+  const uni = document.getElementById("f-university").value;
   filtered = allPeople.filter(p => {
-    const mQ   = !q   || [p.name,p.bio,p.country,p.city,p.countries,String(p.year)].some(v=>(v||"").toLowerCase().includes(q));
+    const universities = getUniversities(p);
+    const universityText = universities.join(", ");
+    const mQ   = !q   || [p.name,p.bio,p.country,p.city,p.countries,String(p.year),universityText].some(v=>(v||"").toLowerCase().includes(q));
     const mLoc = !loc || p.country === loc;
     const mCty = !cty || p.countries === cty;
     const mYr  = !yr  || String(p.year) === yr;
-    return mQ && mLoc && mCty && mYr;
+    const mUni = !uni || universities.includes(uni);
+    return mQ && mLoc && mCty && mYr && mUni;
   });
   currentPage = 1;
   renderGrid();
@@ -406,6 +451,8 @@ function openModal(p) {
   document.getElementById("m-bio").textContent   = p.bio||"";
   document.getElementById("m-represented").innerHTML = p.countries?`<strong>Countries Represented:</strong> ${p.countries}`:"";
   document.getElementById("m-home").innerHTML    = p.country?`<strong>Current Location:</strong> ${[p.city,p.country].filter(Boolean).join(", ")}`:"";
+  const university = getUniversities(p).join(", ");
+  document.getElementById("m-university").innerHTML = university?`<strong>University:</strong> ${university}`:"";
   document.getElementById("m-pronouns").innerHTML= p.pronouns?`<strong>Pronouns:</strong> ${p.pronouns}`:"";
   document.getElementById("m-linkedin").innerHTML= p.linkedin?`<strong>LinkedIn:</strong> <a href="${p.linkedin}" target="_blank" rel="noopener">${p.linkedin}</a>`:"";
   document.getElementById("overlay").classList.add("open");
@@ -419,7 +466,7 @@ function closeModal() {
 document.getElementById("closeBtn").addEventListener("click",closeModal);
 document.getElementById("overlay").addEventListener("click",e=>{if(e.target===document.getElementById("overlay"))closeModal();});
 document.addEventListener("keydown",e=>e.key==="Escape"&&closeModal());
-["search","f-location","f-country","f-year"].forEach(id=>
+["search","f-location","f-country","f-year","f-university"].forEach(id=>
   document.getElementById(id).addEventListener("input",applyFilters)
 );
 
