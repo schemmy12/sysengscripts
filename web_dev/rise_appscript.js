@@ -2,6 +2,7 @@
 const DIRECTORY_TABLE  = "Fellows";
 const CALENDAR_TABLE   = "Fellow Events Calendar & Media";
 const ORGANIZATIONS_TABLE = "Organizations";
+const BIRTHDAY_VIEW    = "Fellow Birthdays";
 const FILTER           = "Rise Fellow";
 const HANDBOOK_DOC_ID  = '1xgMa9deWVb2jL8pO9TcqcjUzCuQwoETIO2MrJChej2M';
 
@@ -20,12 +21,25 @@ const DIRECTORY_FIELDS = [
   "Undergraduate Institution",
 ];
 
+const BIRTHDAY_FIELDS = [
+  "Unique Contact ID",
+  "Preferred First Name",
+  "Family Name",
+  "Selection Year",
+  "DOB",
+  "Current Age",
+  "Rise Category",
+];
+const BIRTHDAY_MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const BIRTHDAY_MONTH_NAMES = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+
 // ── Router ────────────────────────────────────────────────────────────
 function doGet(e) {
   try {
     const type = (e && e.parameter && e.parameter.type) ? e.parameter.type : "directory";
     if (type === "calendar") return calendarResponse();
     if (type === "handbook") return handbookResponse();
+    if (type === "birthdays") return birthdaysResponse();
     return directoryResponse();
   } catch (err) {
     return jsonResponse({ error: err.message });
@@ -488,6 +502,71 @@ function recordDisplayName(fields) {
   return "";
 }
 
+// ── Birthdays ─────────────────────────────────────────────────────────
+function birthdaysResponse() {
+  const { token, baseId } = getProps();
+  const records = fetchAll(token, baseId, DIRECTORY_TABLE, BIRTHDAY_FIELDS, { view: BIRTHDAY_VIEW });
+  const currentMonth = new Date().getMonth() + 1;
+  const birthdays = records
+    .map(r => normaliseBirthday(r.fields))
+    .filter(b => b.name && b.dob && b.month === currentMonth)
+    .sort((a, b) => a.day - b.day || a.name.localeCompare(b.name));
+  return jsonResponse({
+    count: birthdays.length,
+    month: currentMonth,
+    monthName: BIRTHDAY_MONTH_NAMES[currentMonth - 1],
+    birthdays
+  });
+}
+
+function normaliseBirthday(f) {
+  const first = fieldText(f["Preferred First Name"]);
+  const last = fieldText(f["Family Name"]);
+  const fallbackName = fieldText(f["Unique Contact ID"]).replace(/\s*\[[^\]]+\]\s*$/, "");
+  const dob = parseBirthdayDate(f["DOB"]);
+  const year = new Date().getFullYear();
+  const turningAge = dob && dob.year ? year - dob.year : "";
+  return {
+    id: fieldText(f["Unique Contact ID"]),
+    name: [first, last].filter(Boolean).join(" ") || fallbackName,
+    year: fieldText(f["Selection Year"]),
+    dob: dob ? `${dob.year}-${pad2(dob.month)}-${pad2(dob.day)}` : "",
+    dateLabel: dob ? formatBirthdayLabel(dob.month, dob.day) : "",
+    month: dob ? dob.month : "",
+    day: dob ? dob.day : "",
+    currentAge: fieldText(f["Current Age"]),
+    turningAge,
+  };
+}
+
+function parseBirthdayDate(value) {
+  const text = fieldText(value);
+  if (!text) return null;
+  const iso = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) {
+    return {
+      year: Number(iso[1]),
+      month: Number(iso[2]),
+      day: Number(iso[3]),
+    };
+  }
+  const parsed = new Date(text);
+  if (isNaN(parsed.getTime())) return null;
+  return {
+    year: parsed.getFullYear(),
+    month: parsed.getMonth() + 1,
+    day: parsed.getDate(),
+  };
+}
+
+function formatBirthdayLabel(month, day) {
+  return `${BIRTHDAY_MONTHS[month - 1]} ${day}`;
+}
+
+function pad2(n) {
+  return String(n).padStart(2, "0");
+}
+
 // ── Calendar ──────────────────────────────────────────────────────────
 function calendarResponse() {
   const { token, baseId } = getProps();
@@ -522,13 +601,14 @@ function getProps() {
   return { token, baseId };
 }
 
-function fetchAll(token, baseId, tableName, fields) {
+function fetchAll(token, baseId, tableName, fields, opts) {
   const all = [];
   let offset = null;
   do {
     let url = `https://api.airtable.com/v0/${baseId}/${encodeURIComponent(tableName)}?pageSize=100`;
     if (fields && fields.length > 0)
       fields.forEach(f => url += `&fields[]=${encodeURIComponent(f)}`);
+    if (opts && opts.view) url += `&view=${encodeURIComponent(opts.view)}`;
     if (offset) url += `&offset=${offset}`;
     const res = UrlFetchApp.fetch(url, {
       headers: { Authorization: `Bearer ${token}` },

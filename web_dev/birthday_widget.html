@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Birthdays This Month</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap');
+:root {
+  --navy:#2F4166;
+  --bright-blue:#235EA0;
+  --gold:#f7cb47;
+  --border:#dde2ea;
+  --text:#2F4166;
+  --muted:#5a6a85;
+  --soft:#f6f8fb;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Poppins',sans-serif;background:transparent;color:var(--text);}
+.birthday-widget{width:100%;background:#fff;border:1px solid var(--border);border-radius:10px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.06);}
+.widget-header{display:flex;align-items:center;gap:10px;padding:14px 16px;background:var(--navy);color:#fff;}
+.header-icon{width:28px;height:28px;border-radius:6px;background:var(--gold);color:var(--navy);display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.widget-title{font-size:15px;font-weight:800;line-height:1.2;}
+.widget-subtitle{font-size:11px;font-weight:500;opacity:.78;margin-top:1px;}
+.birthday-list{list-style:none;}
+.birthday-item{display:flex;align-items:center;gap:12px;padding:13px 16px;border-bottom:1px solid var(--border);}
+.birthday-item:last-child{border-bottom:none;}
+.date-badge{width:52px;min-width:52px;border-radius:8px;background:var(--soft);border:1px solid var(--border);text-align:center;overflow:hidden;}
+.date-month{display:block;background:var(--bright-blue);color:#fff;font-size:10px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;padding:3px 2px;}
+.date-day{display:block;color:var(--navy);font-size:18px;font-weight:800;line-height:1;padding:7px 2px 8px;}
+.birthday-main{min-width:0;flex:1;}
+.birthday-name{font-size:13px;font-weight:700;color:var(--navy);line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.birthday-meta{font-size:11px;color:var(--muted);margin-top:3px;line-height:1.35;}
+.birthday-age{font-size:11px;font-weight:700;color:var(--bright-blue);white-space:nowrap;}
+.status{padding:24px 16px;text-align:center;color:var(--muted);font-size:13px;}
+.spinner{width:26px;height:26px;border:3px solid var(--border);border-top-color:var(--gold);border-radius:50%;animation:spin .7s linear infinite;margin:0 auto 10px;}
+@keyframes spin{to{transform:rotate(360deg);}}
+@media(max-width:420px){
+  .birthday-item{padding:12px 14px;gap:10px;}
+  .birthday-age{display:none;}
+}
+</style>
+</head>
+<body>
+<section class="birthday-widget" aria-label="Fellow birthdays this month">
+  <div class="widget-header">
+    <div class="header-icon" aria-hidden="true">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M20 12v10H4V12"/><path d="M2 7h20v5H2z"/><path d="M12 22V7"/><path d="M12 7H7.5a2.5 2.5 0 1 1 2.2-3.7C10.5 4.8 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 1 0-2.2-3.7C13.5 4.8 12 7 12 7z"/></svg>
+    </div>
+    <div>
+      <div class="widget-title">Birthdays This Month</div>
+      <div class="widget-subtitle" id="widget-subtitle">Rise Fellows</div>
+    </div>
+  </div>
+  <div id="birthday-content" class="status">
+    <div class="spinner"></div>
+    Loading birthdays...
+  </div>
+</section>
+
+<script>
+const API_URL = "https://script.google.com/macros/s/AKfycbwDMZzrahIhHwlEcciQ4TcEOHOdih5h7Sy-Wg-uVfiSS_gNvZeGXr42TkK3RoS6MRm9Cg/exec";
+
+function esc(s) {
+  return (s || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+function dateParts(label) {
+  const parts = (label || "").split(" ");
+  return { month: parts[0] || "", day: (parts[1] || "").replace(",", "") };
+}
+function dayLabel(day) {
+  const today = new Date();
+  if (Number(day) === today.getDate()) return "Today";
+  return "";
+}
+function ageLabel(b) {
+  if (b.turningAge) return `Turns ${b.turningAge}`;
+  if (b.currentAge) return `Age ${b.currentAge}`;
+  return "";
+}
+function renderBirthdays(birthdays, monthName) {
+  const content = document.getElementById("birthday-content");
+  document.getElementById("widget-subtitle").textContent = monthName ? `${monthName} birthdays` : "Rise Fellows";
+  if (!birthdays.length) {
+    content.className = "status";
+    content.textContent = monthName ? `No ${monthName} birthdays found.` : "No birthdays found.";
+    return;
+  }
+  content.className = "";
+  content.innerHTML = `<ul class="birthday-list">${birthdays.map(b => {
+    const date = dateParts(b.dateLabel);
+    const meta = [dayLabel(b.day), b.year].filter(Boolean).join(" · ");
+    return `<li class="birthday-item">
+      <div class="date-badge">
+        <span class="date-month">${esc(date.month)}</span>
+        <span class="date-day">${esc(date.day)}</span>
+      </div>
+      <div class="birthday-main">
+        <div class="birthday-name">${esc(b.name)}</div>
+        <div class="birthday-meta">${esc(meta)}</div>
+      </div>
+      <div class="birthday-age">${esc(ageLabel(b))}</div>
+    </li>`;
+  }).join("")}</ul>`;
+}
+async function init() {
+  try {
+    const res = await fetch(API_URL + "?type=birthdays");
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    renderBirthdays(data.birthdays || [], data.monthName);
+  } catch(e) {
+    const content = document.getElementById("birthday-content");
+    content.className = "status";
+    content.textContent = `Could not load birthdays. ${e.message}`;
+  }
+}
+init();
+</script>
+</body>
+</html>
