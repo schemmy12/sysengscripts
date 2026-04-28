@@ -27,11 +27,12 @@ const BIRTHDAY_FIELDS = [
   "Family Name",
   "Selection Year",
   "DOB",
-  "Current Age",
   "Rise Category",
 ];
 const BIRTHDAY_MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 const BIRTHDAY_MONTH_NAMES = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+const BIRTHDAY_CACHE_KEY = 'birthday_data_v1';
+const BIRTHDAY_CACHE_TTL_SEC = 6 * 60 * 60;
 
 // ── Router ────────────────────────────────────────────────────────────
 function doGet(e) {
@@ -505,18 +506,26 @@ function recordDisplayName(fields) {
 // ── Birthdays ─────────────────────────────────────────────────────────
 function birthdaysResponse() {
   const { token, baseId } = getProps();
-  const records = fetchAll(token, baseId, DIRECTORY_TABLE, BIRTHDAY_FIELDS, { view: BIRTHDAY_VIEW });
   const currentMonth = new Date().getMonth() + 1;
+  const currentYear = new Date().getFullYear();
+  const cacheKey = `${BIRTHDAY_CACHE_KEY}:${currentYear}:${currentMonth}`;
+  const cache = CacheService.getScriptCache();
+  const cached = cache.get(cacheKey);
+  if (cached) return jsonResponse(JSON.parse(cached));
+
+  const records = fetchAll(token, baseId, DIRECTORY_TABLE, BIRTHDAY_FIELDS, { view: BIRTHDAY_VIEW });
   const birthdays = records
     .map(r => normaliseBirthday(r.fields))
     .filter(b => b.name && b.dob && b.month === currentMonth)
     .sort((a, b) => a.day - b.day || a.name.localeCompare(b.name));
-  return jsonResponse({
+  const result = {
     count: birthdays.length,
     month: currentMonth,
     monthName: BIRTHDAY_MONTH_NAMES[currentMonth - 1],
     birthdays
-  });
+  };
+  cache.put(cacheKey, JSON.stringify(result), BIRTHDAY_CACHE_TTL_SEC);
+  return jsonResponse(result);
 }
 
 function normaliseBirthday(f) {
@@ -524,8 +533,6 @@ function normaliseBirthday(f) {
   const last = fieldText(f["Family Name"]);
   const fallbackName = fieldText(f["Unique Contact ID"]).replace(/\s*\[[^\]]+\]\s*$/, "");
   const dob = parseBirthdayDate(f["DOB"]);
-  const year = new Date().getFullYear();
-  const turningAge = dob && dob.year ? year - dob.year : "";
   return {
     id: fieldText(f["Unique Contact ID"]),
     name: [first, last].filter(Boolean).join(" ") || fallbackName,
@@ -534,8 +541,6 @@ function normaliseBirthday(f) {
     dateLabel: dob ? formatBirthdayLabel(dob.month, dob.day) : "",
     month: dob ? dob.month : "",
     day: dob ? dob.day : "",
-    currentAge: fieldText(f["Current Age"]),
-    turningAge,
   };
 }
 

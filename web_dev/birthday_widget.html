@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Birthdays This Month</title>
+<link rel="preconnect" href="https://script.google.com">
+<link rel="preconnect" href="https://script.googleusercontent.com">
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap');
 :root {
@@ -31,13 +33,11 @@ body{font-family:'Poppins',sans-serif;background:transparent;color:var(--text);}
 .birthday-main{min-width:0;flex:1;}
 .birthday-name{font-size:13px;font-weight:700;color:var(--navy);line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .birthday-meta{font-size:11px;color:var(--muted);margin-top:3px;line-height:1.35;}
-.birthday-age{font-size:11px;font-weight:700;color:var(--bright-blue);white-space:nowrap;}
 .status{padding:24px 16px;text-align:center;color:var(--muted);font-size:13px;}
 .spinner{width:26px;height:26px;border:3px solid var(--border);border-top-color:var(--gold);border-radius:50%;animation:spin .7s linear infinite;margin:0 auto 10px;}
 @keyframes spin{to{transform:rotate(360deg);}}
 @media(max-width:420px){
   .birthday-item{padding:12px 14px;gap:10px;}
-  .birthday-age{display:none;}
 }
 </style>
 </head>
@@ -64,6 +64,29 @@ const API_URL = "https://script.google.com/macros/s/AKfycbwDMZzrahIhHwlEcciQ4TcE
 function esc(s) {
   return (s || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
 }
+function currentCacheKey() {
+  const today = new Date();
+  return `riseBirthdayWidget:${today.getFullYear()}-${today.getMonth() + 1}`;
+}
+function readCachedBirthdays() {
+  try {
+    const raw = localStorage.getItem(currentCacheKey());
+    if (!raw) return null;
+    const cached = JSON.parse(raw);
+    if (!cached || !cached.savedAt || !cached.data) return null;
+    return cached.data;
+  } catch(e) {
+    return null;
+  }
+}
+function writeCachedBirthdays(data) {
+  try {
+    localStorage.setItem(currentCacheKey(), JSON.stringify({
+      savedAt: Date.now(),
+      data
+    }));
+  } catch(e) {}
+}
 function dateParts(label) {
   const parts = (label || "").split(" ");
   return { month: parts[0] || "", day: (parts[1] || "").replace(",", "") };
@@ -71,11 +94,6 @@ function dateParts(label) {
 function dayLabel(day) {
   const today = new Date();
   if (Number(day) === today.getDate()) return "Today";
-  return "";
-}
-function ageLabel(b) {
-  if (b.turningAge) return `Turns ${b.turningAge}`;
-  if (b.currentAge) return `Age ${b.currentAge}`;
   return "";
 }
 function renderBirthdays(birthdays, monthName) {
@@ -99,21 +117,35 @@ function renderBirthdays(birthdays, monthName) {
         <div class="birthday-name">${esc(b.name)}</div>
         <div class="birthday-meta">${esc(meta)}</div>
       </div>
-      <div class="birthday-age">${esc(ageLabel(b))}</div>
     </li>`;
   }).join("")}</ul>`;
 }
-async function init() {
+function showLoadError() {
+  const content = document.getElementById("birthday-content");
+  content.className = "status";
+  content.textContent = "Birthdays are temporarily unavailable. Please try again later.";
+}
+async function fetchBirthdays() {
+  const res = await fetch(API_URL + "?type=birthdays", { cache: "no-store" });
+  if (!res.ok) throw new Error(`Request failed: ${res.status}`);
+  const data = await res.json();
+  if (data.error) throw new Error(data.error);
+  return data;
+}
+async function refreshBirthdays(showError) {
   try {
-    const res = await fetch(API_URL + "?type=birthdays");
-    const data = await res.json();
-    if (data.error) throw new Error(data.error);
+    const data = await fetchBirthdays();
+    writeCachedBirthdays(data);
     renderBirthdays(data.birthdays || [], data.monthName);
   } catch(e) {
-    const content = document.getElementById("birthday-content");
-    content.className = "status";
-    content.textContent = `Could not load birthdays. ${e.message}`;
+    console.error("Birthday widget failed to load", e);
+    if (showError) showLoadError();
   }
+}
+function init() {
+  const cached = readCachedBirthdays();
+  if (cached) renderBirthdays(cached.birthdays || [], cached.monthName);
+  refreshBirthdays(!cached);
 }
 init();
 </script>
