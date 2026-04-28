@@ -447,7 +447,7 @@ function openModal(p) {
   document.getElementById("m-email").textContent = p.email;
   document.getElementById("m-flag").textContent  = flagEmoji(p.countries||p.country);
   document.getElementById("m-country").textContent = (p.countries||p.country||"").toUpperCase();
-  document.getElementById("m-cohort").innerHTML  = `${p.year} <span class="fellow-label">WINNER</span>`;
+  document.getElementById("m-cohort").innerHTML  = `${p.year} <span class="fellow-label">FELLOW</span>`;
   document.getElementById("m-bio").textContent   = p.bio||"";
   document.getElementById("m-represented").innerHTML = p.countries?`<strong>Countries Represented:</strong> ${p.countries}`:"";
   document.getElementById("m-home").innerHTML    = p.country?`<strong>Current Location:</strong> ${[p.city,p.country].filter(Boolean).join(", ")}`:"";
