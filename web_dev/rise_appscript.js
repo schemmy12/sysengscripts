@@ -33,6 +33,9 @@ const BIRTHDAY_MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","
 const BIRTHDAY_MONTH_NAMES = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 const BIRTHDAY_CACHE_KEY = 'birthday_data_v1';
 const BIRTHDAY_CACHE_TTL_SEC = 6 * 60 * 60;
+const NEWSLETTER_CACHE_KEY = 'newsletter_data_v1';
+const NEWSLETTER_CACHE_TTL_SEC = 15 * 60;
+const MAILCHIMP_FOLDER_CACHE_TTL_SEC = 6 * 60 * 60;
 
 // ── Router ────────────────────────────────────────────────────────────
 function doGet(e) {
@@ -41,6 +44,7 @@ function doGet(e) {
     if (type === "calendar") return calendarResponse();
     if (type === "handbook") return handbookResponse();
     if (type === "birthdays") return birthdaysResponse();
+    if (type === "newsletter") return newsletterResponse();
     return directoryResponse();
   } catch (err) {
     return jsonResponse({ error: err.message });
@@ -572,6 +576,122 @@ function pad2(n) {
   return String(n).padStart(2, "0");
 }
 
+// ── Newsletter ────────────────────────────────────────────────────────
+function newsletterResponse() {
+  const cache = CacheService.getScriptCache();
+  const cached = cache.get(NEWSLETTER_CACHE_KEY);
+  if (cached) return jsonResponse(JSON.parse(cached));
+
+  const config = getMailchimpProps();
+  const folderId = resolveMailchimpFolderId(config);
+  const campaign = latestNewsletterCampaign(config, folderId);
+  const result = {
+    updatedAt: new Date().toISOString(),
+    folderName: config.folderName,
+    newsletter: campaign ? normaliseNewsletter(campaign) : null,
+  };
+  cache.put(NEWSLETTER_CACHE_KEY, JSON.stringify(result), NEWSLETTER_CACHE_TTL_SEC);
+  return jsonResponse(result);
+}
+
+function latestNewsletterCampaign(config, folderId) {
+  const data = mailchimpRequest(config, '/campaigns', {
+    count: 10,
+    status: 'sent',
+    type: 'regular',
+    list_id: config.audienceId,
+    folder_id: folderId,
+    sort_field: 'send_time',
+    sort_dir: 'DESC'
+  });
+  const campaigns = data.campaigns || [];
+  const matches = campaigns
+    .filter(c => c.status === 'sent')
+    .filter(c => c.type === 'regular')
+    .filter(c => !config.audienceId || (c.recipients && c.recipients.list_id === config.audienceId))
+    .filter(c => !folderId || (c.settings && String(c.settings.folder_id) === String(folderId)))
+    .sort((a, b) => Date.parse(b.send_time || b.create_time || 0) - Date.parse(a.send_time || a.create_time || 0));
+  return matches[0] || null;
+}
+
+function normaliseNewsletter(c) {
+  const settings = c.settings || {};
+  return {
+    id: c.id || '',
+    webId: c.web_id || '',
+    title: settings.title || settings.subject_line || 'Latest newsletter',
+    subject: settings.subject_line || '',
+    previewText: settings.preview_text || '',
+    sendTime: c.send_time || '',
+    archiveUrl: c.archive_url || c.long_archive_url || '',
+    longArchiveUrl: c.long_archive_url || c.archive_url || '',
+  };
+}
+
+function getMailchimpProps() {
+  const props = PropertiesService.getScriptProperties();
+  const apiKey = props.getProperty('MAILCHIMP_API_KEY');
+  const serverPrefix = props.getProperty('MAILCHIMP_SERVER_PREFIX');
+  const audienceId = props.getProperty('MAILCHIMP_AUDIENCE_ID');
+  const folderName = props.getProperty('MAILCHIMP_NEWSLETTER_FOLDER');
+  const folderId = props.getProperty('MAILCHIMP_NEWSLETTER_FOLDER_ID');
+  if (!apiKey || !serverPrefix || !audienceId || (!folderName && !folderId)) {
+    throw new Error('Missing Mailchimp newsletter properties');
+  }
+  return {
+    apiKey: apiKey.trim(),
+    serverPrefix: serverPrefix.trim(),
+    audienceId: audienceId.trim(),
+    folderName: folderName ? folderName.trim() : '',
+    folderId: folderId ? folderId.trim() : '',
+  };
+}
+
+function resolveMailchimpFolderId(config) {
+  if (config.folderId) return config.folderId;
+  const cache = CacheService.getScriptCache();
+  const cacheKey = `mailchimp_folder_id:${config.folderName.toLowerCase()}`;
+  const cached = cache.get(cacheKey);
+  if (cached) return cached;
+
+  const data = mailchimpRequest(config, '/campaign-folders', { count: 1000 });
+  const folders = data.folders || data.campaign_folders || [];
+  const folder = folders.find(f => String(f.name || '').trim().toLowerCase() === config.folderName.toLowerCase());
+  if (!folder || !folder.id) throw new Error(`Mailchimp folder not found: ${config.folderName}`);
+  cache.put(cacheKey, String(folder.id), MAILCHIMP_FOLDER_CACHE_TTL_SEC);
+  return String(folder.id);
+}
+
+function mailchimpRequest(config, path, params) {
+  const query = queryString(params);
+  const url = `https://${config.serverPrefix}.api.mailchimp.com/3.0${path}${query ? '?' + query : ''}`;
+  const res = UrlFetchApp.fetch(url, {
+    headers: {
+      Authorization: 'Basic ' + Utilities.base64Encode('rise:' + config.apiKey)
+    },
+    muteHttpExceptions: true
+  });
+  const text = res.getContentText();
+  let data = {};
+  try {
+    data = text ? JSON.parse(text) : {};
+  } catch(e) {
+    throw new Error(`Mailchimp returned invalid JSON (${res.getResponseCode()})`);
+  }
+  if (res.getResponseCode() >= 300) {
+    throw new Error(data.detail || data.title || `Mailchimp request failed (${res.getResponseCode()})`);
+  }
+  return data;
+}
+
+function queryString(params) {
+  if (!params) return '';
+  return Object.keys(params)
+    .filter(k => params[k] !== undefined && params[k] !== null && params[k] !== '')
+    .map(k => `${encodeURIComponent(k)}=${encodeURIComponent(params[k])}`)
+    .join('&');
+}
+
 // ── Calendar ──────────────────────────────────────────────────────────
 function calendarResponse() {
   const { token, baseId } = getProps();
@@ -655,6 +775,16 @@ function diagnose() {
   );
   Logger.log("HTTP: " + res.getResponseCode());
   Logger.log(res.getContentText());
+}
+
+function diagnoseMailchimpNewsletter() {
+  const config = getMailchimpProps();
+  const folderId = resolveMailchimpFolderId(config);
+  const campaign = latestNewsletterCampaign(config, folderId);
+  Logger.log("Mailchimp server prefix: " + config.serverPrefix);
+  Logger.log("Mailchimp audience ID: " + config.audienceId);
+  Logger.log("Mailchimp folder: " + (config.folderName || folderId) + " (" + folderId + ")");
+  Logger.log(campaign ? JSON.stringify(normaliseNewsletter(campaign), null, 2) : "No sent newsletter found yet.");
 }
 
 function warmHandbookCache() {

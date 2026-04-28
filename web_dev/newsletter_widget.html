@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Latest Newsletter</title>
+<link rel="preconnect" href="https://script.google.com">
+<link rel="preconnect" href="https://script.googleusercontent.com">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap');
+:root {
+  --navy:#2F4166;
+  --bright-blue:#235EA0;
+  --gold:#f7cb47;
+  --border:#dde2ea;
+  --text:#2F4166;
+  --muted:#5a6a85;
+  --soft:#f6f8fb;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Poppins',sans-serif;background:transparent;color:var(--text);}
+.newsletter-widget{width:100%;background:#fff;border:1px solid var(--border);border-radius:10px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.06);}
+.widget-header{display:flex;align-items:center;gap:10px;padding:14px 16px;background:var(--navy);color:#fff;}
+.header-icon{width:28px;height:28px;border-radius:6px;background:var(--gold);color:var(--navy);display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.widget-title{font-size:15px;font-weight:800;line-height:1.2;}
+.widget-subtitle{font-size:11px;font-weight:500;opacity:.78;margin-top:1px;}
+.newsletter-card{padding:16px;}
+.newsletter-date{font-size:11px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--bright-blue);margin-bottom:7px;}
+.newsletter-title{font-size:16px;font-weight:800;line-height:1.3;color:var(--navy);margin-bottom:7px;}
+.newsletter-preview{font-size:12px;line-height:1.5;color:var(--muted);margin-bottom:14px;}
+.newsletter-link{display:inline-flex;align-items:center;gap:7px;border-radius:7px;background:var(--bright-blue);color:#fff;text-decoration:none;font-size:12px;font-weight:700;padding:9px 12px;}
+.newsletter-link:hover{background:#1d4f88;}
+.status{padding:24px 16px;text-align:center;color:var(--muted);font-size:13px;}
+.spinner{width:26px;height:26px;border:3px solid var(--border);border-top-color:var(--gold);border-radius:50%;animation:spin .7s linear infinite;margin:0 auto 10px;}
+@keyframes spin{to{transform:rotate(360deg);}}
+</style>
+</head>
+<body>
+<section class="newsletter-widget" aria-label="Latest Rise newsletter">
+  <div class="widget-header">
+    <div class="header-icon" aria-hidden="true">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M4 4h16v16H4z"/><path d="M4 8h16"/><path d="M8 12h8"/><path d="M8 16h5"/></svg>
+    </div>
+    <div>
+      <div class="widget-title">Latest Newsletter</div>
+      <div class="widget-subtitle" id="widget-subtitle">Rise Fellows</div>
+    </div>
+  </div>
+  <div id="newsletter-content" class="status">
+    <div class="spinner"></div>
+    Loading newsletter...
+  </div>
+</section>
+
+<script>
+const API_URL = "https://script.google.com/macros/s/AKfycbwDMZzrahIhHwlEcciQ4TcEOHOdih5h7Sy-Wg-uVfiSS_gNvZeGXr42TkK3RoS6MRm9Cg/exec";
+const CACHE_KEY = "riseNewsletterWidget";
+
+function esc(s) {
+  return (s || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+function readCachedNewsletter() {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY);
+    if (!raw) return null;
+    const cached = JSON.parse(raw);
+    if (!cached || !cached.data) return null;
+    return cached.data;
+  } catch(e) {
+    return null;
+  }
+}
+function writeCachedNewsletter(data) {
+  try {
+    localStorage.setItem(CACHE_KEY, JSON.stringify({
+      savedAt: Date.now(),
+      data
+    }));
+  } catch(e) {}
+}
+function formatSendDate(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (isNaN(date.getTime())) return "";
+  return date.toLocaleDateString(undefined, {
+    month: "long",
+    day: "numeric",
+    year: "numeric"
+  });
+}
+function renderNewsletter(data) {
+  const content = document.getElementById("newsletter-content");
+  const newsletter = data && data.newsletter;
+  document.getElementById("widget-subtitle").textContent = data && data.folderName ? data.folderName : "Rise Fellows";
+
+  if (!newsletter) {
+    content.className = "status";
+    content.textContent = "Latest newsletter coming soon.";
+    return;
+  }
+
+  const date = formatSendDate(newsletter.sendTime);
+  const title = newsletter.title || newsletter.subject || "Latest newsletter";
+  const preview = newsletter.previewText || newsletter.subject || "";
+  const url = newsletter.archiveUrl || newsletter.longArchiveUrl || "";
+  content.className = "";
+  content.innerHTML = `<article class="newsletter-card">
+    ${date ? `<div class="newsletter-date">${esc(date)}</div>` : ""}
+    <h2 class="newsletter-title">${esc(title)}</h2>
+    ${preview ? `<p class="newsletter-preview">${esc(preview)}</p>` : ""}
+    ${url ? `<a class="newsletter-link" href="${esc(url)}" target="_blank" rel="noopener">
+      Read newsletter
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" aria-hidden="true"><path d="M7 17 17 7"/><path d="M7 7h10v10"/></svg>
+    </a>` : ""}
+  </article>`;
+}
+function showLoadError() {
+  const content = document.getElementById("newsletter-content");
+  content.className = "status";
+  content.textContent = "Newsletter is temporarily unavailable. Please try again later.";
+}
+async function fetchNewsletter() {
+  const res = await fetch(API_URL + "?type=newsletter", { cache: "no-store" });
+  if (!res.ok) throw new Error(`Request failed: ${res.status}`);
+  const data = await res.json();
+  if (data.error) throw new Error(data.error);
+  return data;
+}
+async function refreshNewsletter(showError) {
+  try {
+    const data = await fetchNewsletter();
+    writeCachedNewsletter(data);
+    renderNewsletter(data);
+  } catch(e) {
+    console.error("Newsletter widget failed to load", e);
+    if (showError) showLoadError();
+  }
+}
+function init() {
+  const cached = readCachedNewsletter();
+  if (cached) renderNewsletter(cached);
+  refreshNewsletter(!cached);
+}
+init();
+</script>
+</body>
+</html>
