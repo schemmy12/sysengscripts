@@ -1,0 +1,5 @@
+fastapi
+google-api-python-client
+google-auth
+httpx
+uvicorn[standard]
