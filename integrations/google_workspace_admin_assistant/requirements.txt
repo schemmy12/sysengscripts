@@ -2,4 +2,5 @@ fastapi
 google-api-python-client
 google-auth
 httpx
+openai
 uvicorn[standard]
