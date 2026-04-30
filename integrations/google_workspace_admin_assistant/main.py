@@ -263,6 +263,18 @@ def extract_group_members_query(text: str) -> str | None:
     normalized = normalize_slack_text(text)
     lower = normalized.lower().rstrip("?")
 
+    patterns = (
+        r"^who\s+(?:are|is)\s+(?:the\s+)?members\s+of\s+(?:the\s+)?(?:group\s+)?(.+)$",
+        r"^who\s+is\s+(?:a\s+)?member\s+of\s+(?:the\s+)?(?:group\s+)?(.+)$",
+        r"^who(?:'s|\s+is)\s+in\s+(?:the\s+)?(?:group\s+)?(.+)$",
+        r"^(?:list|show)\s+(?:the\s+)?members\s+(?:of|for|in)\s+(?:the\s+)?(?:group\s+)?(.+)$",
+    )
+
+    for pattern in patterns:
+        match = re.match(pattern, normalized, re.I)
+        if match:
+            return clean_command_query(match.group(1))
+
     prefixes = (
         "list group members ",
         "show group members ",
@@ -392,6 +404,9 @@ def build_gpt_input(event: dict[str, Any], text: str) -> list[dict[str, str]]:
         "like 'admin test', 'find user <email or name>', 'list users', "
         "'list suspended users', 'list groups', 'groups for user <email>', "
         "'members of <group>', 'list org units', and 'list domains'. "
+        "You cannot invoke those deterministic commands yourself from a GPT "
+        "reply. If the application did not already provide live lookup results, "
+        "do not say you are running or checking a Workspace command. "
         "If the user asks for tenant-specific data you do not have, say that "
         "you need a Workspace lookup tool for that request and ask for the "
         "specific user, group, device, or admin object they want checked. "
