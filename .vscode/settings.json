@@ -1,4 +1,4 @@
 {
-  "python.defaultInterpreterPath": "${workspaceFolder}/.venv",
+  "python.defaultInterpreterPath": "${workspaceFolder}/integrations/google_workspace_admin_assistant/.venv",
   "python.terminal.activateEnvironment": true
 }
