@@ -6,6 +6,7 @@ import hmac
 import json
 import logging
 import os
+import re
 import time
 from functools import lru_cache
 from typing import Any
@@ -22,6 +23,7 @@ from openai import AsyncOpenAI, OpenAIError
 ADMIN_DIRECTORY_USER_READONLY_SCOPE = (
     "https://www.googleapis.com/auth/admin.directory.user.readonly"
 )
+EMAIL_PATTERN = re.compile(r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", re.I)
 DEFAULT_OPENAI_MODEL = "gpt-5.4-mini"
 OPENAI_REQUEST_TIMEOUT_SECONDS = 30.0
 OPENAI_MAX_OUTPUT_TOKENS = 700
@@ -138,6 +140,45 @@ def is_admin_test_message(text: str) -> bool:
     return "admin test" in text.lower()
 
 
+def normalize_slack_text(text: str) -> str:
+    normalized = re.sub(r"<mailto:([^|>]+)\|[^>]+>", r"\1", text)
+    normalized = re.sub(r"<@[A-Z0-9]+>\s*", "", normalized)
+    return re.sub(r"\s+", " ", normalized).strip()
+
+
+def is_email_like(value: str) -> bool:
+    return EMAIL_PATTERN.fullmatch(value.strip()) is not None
+
+
+def extract_user_lookup_query(text: str) -> str | None:
+    normalized = normalize_slack_text(text)
+    lower = normalized.lower().rstrip("?")
+
+    prefixes = (
+        "find user ",
+        "lookup user ",
+        "look up user ",
+        "get user ",
+        "show user ",
+        "user lookup ",
+        "lookup ",
+    )
+
+    for prefix in prefixes:
+        if lower.startswith(prefix):
+            query = normalized[len(prefix) :].strip(" :?\"'")
+            return query or None
+
+    email_match = EMAIL_PATTERN.search(normalized)
+    if email_match and "suspended" in lower:
+        return email_match.group(0)
+
+    if is_email_like(normalized):
+        return normalized
+
+    return None
+
+
 def openai_model() -> str:
     return os.getenv("OPENAI_MODEL", DEFAULT_OPENAI_MODEL).strip() or DEFAULT_OPENAI_MODEL
 
@@ -190,9 +231,9 @@ def build_common_reply(text: str) -> str | None:
     }:
         return (
             "I can help with Google Workspace admin questions in plain English. "
-            "Right now I can run `admin test` to confirm Admin SDK access. "
-            "Next up, we are adding live lookup tools for users, groups, org "
-            "units, suspended accounts, and device checks."
+            "Right now I can run `admin test` and `find user <email or name>`. "
+            "Next up, we are adding live lookup tools for groups, org units, "
+            "suspended-account reports, and device checks."
         )
 
     return None
@@ -220,8 +261,9 @@ def build_gpt_input(event: dict[str, Any], text: str) -> list[dict[str, str]]:
         "professional, plain-English style. Keep Slack formatting simple. "
         "Do not claim that you queried Google Admin Console or saw live tenant "
         "data unless the application explicitly provides those results. "
-        "For now, live Workspace access is only confirmed by the 'admin test' "
-        "smoke test; deeper Workspace lookup tools are being added next. "
+        "For now, live Workspace access is handled by deterministic commands "
+        "like 'admin test' and 'find user <email or name>'; deeper Workspace "
+        "lookup tools are being added next. "
         "If the user asks for tenant-specific data you do not have, say that "
         "you need a Workspace lookup tool for that request and ask for the "
         "specific user, group, device, or admin object they want checked. "
@@ -364,6 +406,169 @@ def fetch_workspace_user_sample(max_results: int = 5) -> list[dict[str, Any]]:
         len(user_list),
     )
     return user_list
+
+
+def directory_query_value(value: str) -> str:
+    return value.replace("\\", "").replace("'", "").strip()
+
+
+def get_workspace_user(user_key: str) -> dict[str, Any]:
+    directory = workspace_directory_service()
+    user = (
+        directory.users()
+        .get(
+            userKey=user_key,
+            projection="full",
+            viewType="admin_view",
+        )
+        .execute()
+    )
+    return user if isinstance(user, dict) else {}
+
+
+def search_workspace_users(query: str, max_results: int = 5) -> list[dict[str, Any]]:
+    directory = workspace_directory_service()
+    safe_query = directory_query_value(query)
+
+    if not safe_query:
+        return []
+
+    if "@" in safe_query:
+        directory_query = f"email:{safe_query}*"
+    else:
+        directory_query = f"name:'{safe_query}'"
+
+    response = (
+        directory.users()
+        .list(
+            customer="my_customer",
+            maxResults=max_results,
+            orderBy="email",
+            projection="full",
+            query=directory_query,
+            viewType="admin_view",
+        )
+        .execute()
+    )
+    users = response.get("users", [])
+    return users if isinstance(users, list) else []
+
+
+def find_workspace_users(query: str) -> list[dict[str, Any]]:
+    normalized = query.strip()
+
+    if not normalized:
+        return []
+
+    if "@" in normalized:
+        try:
+            user = get_workspace_user(normalized)
+            return [user] if user else []
+        except HttpError as exc:
+            if getattr(exc.resp, "status", None) != 404:
+                raise
+
+    return search_workspace_users(normalized)
+
+
+def yes_no(value: Any) -> str:
+    if isinstance(value, bool):
+        return "Yes" if value else "No"
+    return "Unknown"
+
+
+def user_admin_label(user: dict[str, Any]) -> str:
+    if user.get("isAdmin"):
+        return "Super admin"
+    if user.get("isDelegatedAdmin"):
+        return "Delegated admin"
+    return "No"
+
+
+def format_aliases(user: dict[str, Any]) -> str:
+    aliases = []
+    for key in ("aliases", "nonEditableAliases"):
+        values = user.get(key)
+        if isinstance(values, list):
+            aliases.extend(str(value) for value in values if value)
+
+    return ", ".join(aliases[:8]) if aliases else "None"
+
+
+def format_workspace_user(user: dict[str, Any]) -> str:
+    name = user.get("name", {})
+    full_name = name.get("fullName") if isinstance(name, dict) else None
+    primary_email = user.get("primaryEmail", "Unknown")
+    last_login = user.get("lastLoginTime") or "Unknown"
+
+    if last_login == "1970-01-01T00:00:00.000Z":
+        last_login = "Never"
+
+    return "\n".join(
+        [
+            "Found Google Workspace user:",
+            f"- Name: {full_name or 'Unknown'}",
+            f"- Primary email: {primary_email}",
+            f"- Suspended: {yes_no(user.get('suspended'))}",
+            f"- Admin: {user_admin_label(user)}",
+            f"- Org unit: {user.get('orgUnitPath') or 'Unknown'}",
+            f"- Mailbox setup: {yes_no(user.get('isMailboxSetup'))}",
+            f"- Last login: {last_login}",
+            f"- Aliases: {format_aliases(user)}",
+        ]
+    )
+
+
+def build_find_user_reply(query: str) -> str:
+    users = find_workspace_users(query)
+
+    if not users:
+        return (
+            f"I could not find a Google Workspace user matching `{query}`. "
+            "Try a primary email, alias, or a more specific full name."
+        )
+
+    if len(users) == 1:
+        return format_workspace_user(users[0])
+
+    lines = [
+        f"I found {len(users)} matching users. Try one primary email for details:",
+    ]
+
+    for user in users:
+        if not isinstance(user, dict):
+            continue
+        name = user.get("name", {})
+        full_name = name.get("fullName") if isinstance(name, dict) else None
+        primary_email = user.get("primaryEmail", "unknown")
+        label = f"{primary_email} ({full_name})" if full_name else str(primary_email)
+        lines.append(f"- {label}")
+
+    return "\n".join(lines)
+
+
+async def build_find_user_reply_safely(query: str) -> str:
+    start = time.perf_counter()
+    try:
+        return await asyncio.to_thread(build_find_user_reply, query)
+    except HttpError:
+        logger.exception("Google Workspace user lookup failed.")
+        return (
+            "I reached the Google Workspace user lookup path, but the API call "
+            "failed. Check Cloud Run logs for the Admin SDK error."
+        )
+    except Exception:
+        logger.exception("Google Workspace user lookup setup failed.")
+        return (
+            "I tried the user lookup, but something in the Workspace setup failed. "
+            "Check the service account secret and delegated admin email."
+        )
+    finally:
+        logger.info(
+            "User lookup reply built in %.0f ms; query=%r",
+            (time.perf_counter() - start) * 1000,
+            query,
+        )
 
 
 def build_admin_test_reply() -> str:
@@ -543,6 +748,18 @@ async def handle_slack_event_reply(event: dict[str, Any]) -> None:
             (time.perf_counter() - start) * 1000,
         )
         return
+
+    if isinstance(text, str):
+        user_lookup_query = extract_user_lookup_query(text)
+        if user_lookup_query:
+            placeholder_ts = await post_slack_message(
+                channel,
+                f"Looking up Google Workspace user `{user_lookup_query}`...",
+                thread_ts,
+            )
+            reply = await build_find_user_reply_safely(user_lookup_query)
+            await finish_slack_placeholder(channel, placeholder_ts, reply, thread_ts)
+            return
 
     if isinstance(text, str):
         common_reply = build_common_reply(text)
