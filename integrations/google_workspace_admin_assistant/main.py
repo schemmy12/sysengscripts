@@ -20,14 +20,23 @@ from googleapiclient.errors import HttpError
 from openai import AsyncOpenAI, OpenAIError
 
 
-ADMIN_DIRECTORY_USER_READONLY_SCOPE = (
-    "https://www.googleapis.com/auth/admin.directory.user.readonly"
+GOOGLE_WORKSPACE_READONLY_SCOPES = (
+    "https://www.googleapis.com/auth/admin.directory.user.readonly",
+    "https://www.googleapis.com/auth/admin.directory.group.readonly",
+    "https://www.googleapis.com/auth/admin.directory.group.member.readonly",
+    "https://www.googleapis.com/auth/admin.directory.orgunit.readonly",
+    "https://www.googleapis.com/auth/admin.directory.device.chromeos.readonly",
+    "https://www.googleapis.com/auth/admin.directory.device.mobile.readonly",
+    "https://www.googleapis.com/auth/admin.directory.rolemanagement.readonly",
+    "https://www.googleapis.com/auth/admin.directory.customer.readonly",
+    "https://www.googleapis.com/auth/admin.directory.domain.readonly",
 )
 EMAIL_PATTERN = re.compile(r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", re.I)
 DEFAULT_OPENAI_MODEL = "gpt-5.4-mini"
 OPENAI_REQUEST_TIMEOUT_SECONDS = 30.0
 OPENAI_MAX_OUTPUT_TOKENS = 700
 GPT_REPLY_TIMEOUT_SECONDS = 20.0
+MAX_COMMAND_RESULTS = 10
 REQUEST_TOLERANCE_SECONDS = 60 * 5
 SLACK_POST_MESSAGE_URL = "https://slack.com/api/chat.postMessage"
 SLACK_UPDATE_MESSAGE_URL = "https://slack.com/api/chat.update"
@@ -179,6 +188,123 @@ def extract_user_lookup_query(text: str) -> str | None:
     return None
 
 
+def clean_command_query(query: str) -> str | None:
+    cleaned = query.strip(" :?\"'")
+    return cleaned or None
+
+
+def extract_user_list_mode(text: str) -> str | None:
+    normalized = normalize_slack_text(text)
+    lower = normalized.lower().rstrip("?")
+
+    if lower in {"list users", "show users", "users", "list all users"}:
+        return "all"
+
+    if lower in {
+        "list suspended users",
+        "show suspended users",
+        "suspended users",
+        "who is suspended",
+        "who is suspended?",
+    }:
+        return "suspended"
+
+    if lower in {
+        "list admins",
+        "show admins",
+        "admin users",
+        "list admin users",
+        "list super admins",
+        "super admins",
+    }:
+        return "admins"
+
+    return None
+
+
+def extract_groups_for_user_query(text: str) -> str | None:
+    normalized = normalize_slack_text(text)
+    patterns = (
+        r"^(?:list|show)\s+groups\s+(?:for|of)\s+(?:user\s+)?(.+)$",
+        r"^groups\s+(?:for|of)\s+(?:user\s+)?(.+)$",
+        r"^(?:what|which)\s+groups\s+is\s+(.+?)\s+in\??$",
+        r"^(?:what|which)\s+groups\s+does\s+(.+?)\s+belong\s+to\??$",
+    )
+
+    for pattern in patterns:
+        match = re.match(pattern, normalized, re.I)
+        if match:
+            return clean_command_query(match.group(1))
+
+    return None
+
+
+def extract_group_lookup_query(text: str) -> str | None:
+    normalized = normalize_slack_text(text)
+    lower = normalized.lower().rstrip("?")
+
+    prefixes = (
+        "find group ",
+        "lookup group ",
+        "look up group ",
+        "get group ",
+        "show group ",
+        "group lookup ",
+    )
+
+    for prefix in prefixes:
+        if lower.startswith(prefix):
+            return clean_command_query(normalized[len(prefix) :])
+
+    return None
+
+
+def extract_group_members_query(text: str) -> str | None:
+    normalized = normalize_slack_text(text)
+    lower = normalized.lower().rstrip("?")
+
+    prefixes = (
+        "list group members ",
+        "show group members ",
+        "group members ",
+        "list members of ",
+        "show members of ",
+        "members of ",
+        "who is in group ",
+    )
+
+    for prefix in prefixes:
+        if lower.startswith(prefix):
+            return clean_command_query(normalized[len(prefix) :])
+
+    return None
+
+
+def is_list_groups_message(text: str) -> bool:
+    normalized = normalize_slack_text(text).lower().rstrip("?")
+    return normalized in {"list groups", "show groups", "groups", "list all groups"}
+
+
+def is_list_org_units_message(text: str) -> bool:
+    normalized = normalize_slack_text(text).lower().rstrip("?")
+    return normalized in {
+        "list org units",
+        "show org units",
+        "org units",
+        "list orgunits",
+        "show orgunits",
+        "orgunits",
+        "list ous",
+        "show ous",
+        "ous",
+    }
+
+
+def is_list_domains_message(text: str) -> bool:
+    normalized = normalize_slack_text(text).lower().rstrip("?")
+    return normalized in {"list domains", "show domains", "domains"}
+
+
 def openai_model() -> str:
     return os.getenv("OPENAI_MODEL", DEFAULT_OPENAI_MODEL).strip() or DEFAULT_OPENAI_MODEL
 
@@ -231,9 +357,10 @@ def build_common_reply(text: str) -> str | None:
     }:
         return (
             "I can help with Google Workspace admin questions in plain English. "
-            "Right now I can run `admin test` and `find user <email or name>`. "
-            "Next up, we are adding live lookup tools for groups, org units, "
-            "suspended-account reports, and device checks."
+            "Right now I can run `admin test`, `find user <email or name>`, "
+            "`list users`, `list suspended users`, `list groups`, "
+            "`groups for user <email or name>`, `members of <group>`, "
+            "`list org units`, and `list domains`."
         )
 
     return None
@@ -262,8 +389,9 @@ def build_gpt_input(event: dict[str, Any], text: str) -> list[dict[str, str]]:
         "Do not claim that you queried Google Admin Console or saw live tenant "
         "data unless the application explicitly provides those results. "
         "For now, live Workspace access is handled by deterministic commands "
-        "like 'admin test' and 'find user <email or name>'; deeper Workspace "
-        "lookup tools are being added next. "
+        "like 'admin test', 'find user <email or name>', 'list users', "
+        "'list suspended users', 'list groups', 'groups for user <email>', "
+        "'members of <group>', 'list org units', and 'list domains'. "
         "If the user asks for tenant-specific data you do not have, say that "
         "you need a Workspace lookup tool for that request and ask for the "
         "specific user, group, device, or admin object they want checked. "
@@ -364,7 +492,7 @@ def workspace_directory_service():
 
     credentials = service_account.Credentials.from_service_account_info(
         service_account_info,
-        scopes=[ADMIN_DIRECTORY_USER_READONLY_SCOPE],
+        scopes=GOOGLE_WORKSPACE_READONLY_SCOPES,
     ).with_subject(admin_email)
 
     directory = build(
@@ -471,6 +599,162 @@ def find_workspace_users(query: str) -> list[dict[str, Any]]:
     return search_workspace_users(normalized)
 
 
+def fetch_workspace_users_by_mode(
+    mode: str,
+    max_results: int = MAX_COMMAND_RESULTS,
+) -> list[dict[str, Any]]:
+    directory = workspace_directory_service()
+    params: dict[str, Any] = {
+        "customer": "my_customer",
+        "maxResults": max_results,
+        "orderBy": "email",
+        "projection": "full",
+        "viewType": "admin_view",
+    }
+
+    if mode == "suspended":
+        params["query"] = "isSuspended=true"
+    elif mode == "admins":
+        params["query"] = "isAdmin=true"
+
+    response = directory.users().list(**params).execute()
+    users = response.get("users", [])
+    return users if isinstance(users, list) else []
+
+
+def get_workspace_group(group_key: str) -> dict[str, Any]:
+    directory = workspace_directory_service()
+    group = directory.groups().get(groupKey=group_key).execute()
+    return group if isinstance(group, dict) else {}
+
+
+def search_workspace_groups(
+    query: str,
+    max_results: int = MAX_COMMAND_RESULTS,
+) -> list[dict[str, Any]]:
+    directory = workspace_directory_service()
+    safe_query = directory_query_value(query)
+
+    if not safe_query:
+        return []
+
+    if "@" in safe_query:
+        group_query = f"email:{safe_query}*"
+    elif " " in safe_query:
+        group_query = f"name='{safe_query}'"
+    else:
+        group_query = f"name:{safe_query}*"
+
+    response = (
+        directory.groups()
+        .list(
+            customer="my_customer",
+            maxResults=max_results,
+            orderBy="email",
+            query=group_query,
+        )
+        .execute()
+    )
+    groups = response.get("groups", [])
+    return groups if isinstance(groups, list) else []
+
+
+def find_workspace_groups(query: str) -> list[dict[str, Any]]:
+    normalized = query.strip()
+
+    if not normalized:
+        return []
+
+    if "@" in normalized:
+        try:
+            group = get_workspace_group(normalized)
+            return [group] if group else []
+        except HttpError as exc:
+            if getattr(exc.resp, "status", None) != 404:
+                raise
+
+    return search_workspace_groups(normalized)
+
+
+def fetch_workspace_groups(max_results: int = MAX_COMMAND_RESULTS) -> list[dict[str, Any]]:
+    directory = workspace_directory_service()
+    response = (
+        directory.groups()
+        .list(
+            customer="my_customer",
+            maxResults=max_results,
+            orderBy="email",
+        )
+        .execute()
+    )
+    groups = response.get("groups", [])
+    return groups if isinstance(groups, list) else []
+
+
+def fetch_workspace_groups_for_user(
+    user_key: str,
+    max_results: int = MAX_COMMAND_RESULTS,
+) -> list[dict[str, Any]]:
+    directory = workspace_directory_service()
+    response = (
+        directory.groups()
+        .list(
+            userKey=user_key,
+            maxResults=max_results,
+            orderBy="email",
+        )
+        .execute()
+    )
+    groups = response.get("groups", [])
+    return groups if isinstance(groups, list) else []
+
+
+def fetch_workspace_group_members(
+    group_key: str,
+    max_results: int = MAX_COMMAND_RESULTS,
+) -> list[dict[str, Any]]:
+    directory = workspace_directory_service()
+    response = (
+        directory.members()
+        .list(
+            groupKey=group_key,
+            maxResults=max_results,
+        )
+        .execute()
+    )
+    members = response.get("members", [])
+    return members if isinstance(members, list) else []
+
+
+def fetch_workspace_org_units(
+    max_results: int = MAX_COMMAND_RESULTS,
+) -> list[dict[str, Any]]:
+    directory = workspace_directory_service()
+    response = (
+        directory.orgunits()
+        .list(
+            customerId="my_customer",
+            type="ALL_INCLUDING_PARENT",
+        )
+        .execute()
+    )
+    org_units = response.get("organizationUnits", [])
+    if not isinstance(org_units, list):
+        return []
+    return org_units[:max_results]
+
+
+def fetch_workspace_domains(
+    max_results: int = MAX_COMMAND_RESULTS,
+) -> list[dict[str, Any]]:
+    directory = workspace_directory_service()
+    response = directory.domains().list(customer="my_customer").execute()
+    domains = response.get("domains", [])
+    if not isinstance(domains, list):
+        return []
+    return domains[:max_results]
+
+
 def yes_no(value: Any) -> str:
     if isinstance(value, bool):
         return "Yes" if value else "No"
@@ -519,6 +803,19 @@ def format_workspace_user(user: dict[str, Any]) -> str:
     )
 
 
+def workspace_user_label(user: dict[str, Any]) -> str:
+    name = user.get("name", {})
+    full_name = name.get("fullName") if isinstance(name, dict) else None
+    primary_email = user.get("primaryEmail", "unknown")
+    return f"{primary_email} ({full_name})" if full_name else str(primary_email)
+
+
+def workspace_group_label(group: dict[str, Any]) -> str:
+    email = group.get("email", "unknown")
+    name = group.get("name")
+    return f"{email} ({name})" if name else str(email)
+
+
 def build_find_user_reply(query: str) -> str:
     users = find_workspace_users(query)
 
@@ -545,6 +842,242 @@ def build_find_user_reply(query: str) -> str:
         lines.append(f"- {label}")
 
     return "\n".join(lines)
+
+
+def build_user_list_reply(mode: str) -> str:
+    users = fetch_workspace_users_by_mode(mode)
+
+    if mode == "suspended":
+        title = "Suspended Google Workspace users"
+        empty = "I did not find any suspended Google Workspace users."
+    elif mode == "admins":
+        title = "Super admin Google Workspace users"
+        empty = "I did not find any super admin users."
+    else:
+        title = "Google Workspace users"
+        empty = "I did not find any Google Workspace users."
+
+    if not users:
+        return empty
+
+    lines = [f"{title} (showing up to {MAX_COMMAND_RESULTS}):"]
+    for user in users:
+        if not isinstance(user, dict):
+            continue
+
+        status = "suspended" if user.get("suspended") else "active"
+        admin = user_admin_label(user)
+        org_unit = user.get("orgUnitPath") or "unknown OU"
+        extras = [status, org_unit]
+        if admin != "No":
+            extras.append(admin)
+        lines.append(f"- {workspace_user_label(user)} - {', '.join(extras)}")
+
+    return "\n".join(lines)
+
+
+def format_workspace_group(group: dict[str, Any]) -> str:
+    member_count = group.get("directMembersCount") or "Unknown"
+    description = group.get("description") or "None"
+    aliases = format_aliases(group)
+
+    return "\n".join(
+        [
+            "Found Google Workspace group:",
+            f"- Name: {group.get('name') or 'Unknown'}",
+            f"- Email: {group.get('email') or 'Unknown'}",
+            f"- Direct members: {member_count}",
+            f"- Admin created: {yes_no(group.get('adminCreated'))}",
+            f"- Description: {description}",
+            f"- Aliases: {aliases}",
+        ]
+    )
+
+
+def build_group_lookup_reply(query: str) -> str:
+    groups = find_workspace_groups(query)
+
+    if not groups:
+        return (
+            f"I could not find a Google Workspace group matching `{query}`. "
+            "Try a group email address or a more specific group name."
+        )
+
+    if len(groups) == 1:
+        return format_workspace_group(groups[0])
+
+    lines = [
+        f"I found {len(groups)} matching groups. Try one group email for details:",
+    ]
+    for group in groups:
+        if isinstance(group, dict):
+            lines.append(f"- {workspace_group_label(group)}")
+
+    return "\n".join(lines)
+
+
+def build_group_list_reply() -> str:
+    groups = fetch_workspace_groups()
+
+    if not groups:
+        return "I did not find any Google Workspace groups."
+
+    lines = [f"Google Workspace groups (showing up to {MAX_COMMAND_RESULTS}):"]
+    for group in groups:
+        if not isinstance(group, dict):
+            continue
+
+        member_count = group.get("directMembersCount") or "unknown"
+        lines.append(f"- {workspace_group_label(group)} - {member_count} direct members")
+
+    return "\n".join(lines)
+
+
+def build_groups_for_user_reply(query: str) -> str:
+    users = find_workspace_users(query)
+
+    if not users:
+        return (
+            f"I could not find a Google Workspace user matching `{query}`. "
+            "Try the user's primary email or full name."
+        )
+
+    if len(users) > 1:
+        lines = [f"I found {len(users)} matching users. Try one primary email:"]
+        lines.extend(
+            f"- {workspace_user_label(user)}"
+            for user in users
+            if isinstance(user, dict)
+        )
+        return "\n".join(lines)
+
+    user = users[0]
+    primary_email = str(user.get("primaryEmail") or query)
+    groups = fetch_workspace_groups_for_user(primary_email)
+
+    if not groups:
+        return f"I did not find any Google Workspace groups for `{primary_email}`."
+
+    lines = [
+        f"Google Workspace groups for `{primary_email}` "
+        f"(showing up to {MAX_COMMAND_RESULTS}):",
+    ]
+    for group in groups:
+        if isinstance(group, dict):
+            lines.append(f"- {workspace_group_label(group)}")
+
+    return "\n".join(lines)
+
+
+def build_group_members_reply(query: str) -> str:
+    groups = find_workspace_groups(query)
+
+    if not groups:
+        return (
+            f"I could not find a Google Workspace group matching `{query}`. "
+            "Try the group's email address."
+        )
+
+    if len(groups) > 1:
+        lines = [f"I found {len(groups)} matching groups. Try one group email:"]
+        lines.extend(
+            f"- {workspace_group_label(group)}"
+            for group in groups
+            if isinstance(group, dict)
+        )
+        return "\n".join(lines)
+
+    group = groups[0]
+    group_email = str(group.get("email") or query)
+    members = fetch_workspace_group_members(group_email)
+
+    if not members:
+        return f"I did not find any direct members for `{group_email}`."
+
+    lines = [
+        f"Direct members of `{group_email}` "
+        f"(showing up to {MAX_COMMAND_RESULTS}):",
+    ]
+    for member in members:
+        if not isinstance(member, dict):
+            continue
+
+        email = member.get("email") or member.get("id") or "unknown"
+        role = member.get("role") or "MEMBER"
+        member_type = member.get("type") or "unknown type"
+        lines.append(f"- {email} - {role}, {member_type}")
+
+    return "\n".join(lines)
+
+
+def build_org_units_reply() -> str:
+    org_units = fetch_workspace_org_units()
+
+    if not org_units:
+        return "I did not find any Google Workspace org units."
+
+    lines = [f"Google Workspace org units (showing up to {MAX_COMMAND_RESULTS}):"]
+    for org_unit in org_units:
+        if not isinstance(org_unit, dict):
+            continue
+
+        path = org_unit.get("orgUnitPath") or "/"
+        name = org_unit.get("name") or path
+        parent = org_unit.get("parentOrgUnitPath") or "none"
+        lines.append(f"- {path} ({name}) - parent: {parent}")
+
+    return "\n".join(lines)
+
+
+def build_domains_reply() -> str:
+    domains = fetch_workspace_domains()
+
+    if not domains:
+        return "I did not find any Google Workspace domains."
+
+    lines = [f"Google Workspace domains (showing up to {MAX_COMMAND_RESULTS}):"]
+    for domain in domains:
+        if not isinstance(domain, dict):
+            continue
+
+        flags = []
+        if domain.get("isPrimary"):
+            flags.append("primary")
+        if domain.get("verified"):
+            flags.append("verified")
+        label = ", ".join(flags) if flags else "no flags returned"
+        lines.append(f"- {domain.get('domainName') or 'unknown'} - {label}")
+
+    return "\n".join(lines)
+
+
+async def build_workspace_command_reply_safely(
+    command_name: str,
+    builder: Any,
+    *args: Any,
+) -> str:
+    start = time.perf_counter()
+    try:
+        return await asyncio.to_thread(builder, *args)
+    except HttpError:
+        logger.exception("Google Workspace command failed: %s", command_name)
+        return (
+            f"I reached the `{command_name}` Workspace path, but the Admin SDK "
+            "API call failed. Check Cloud Run logs for the exact error."
+        )
+    except Exception:
+        logger.exception("Google Workspace command setup failed: %s", command_name)
+        return (
+            f"I tried `{command_name}`, but something in the Workspace setup "
+            "failed. Check the service account secret, delegated admin email, "
+            "and domain-wide delegation scopes."
+        )
+    finally:
+        logger.info(
+            "Workspace command completed in %.0f ms; command=%s",
+            (time.perf_counter() - start) * 1000,
+            command_name,
+        )
 
 
 async def build_find_user_reply_safely(query: str) -> str:
@@ -750,6 +1283,105 @@ async def handle_slack_event_reply(event: dict[str, Any]) -> None:
         return
 
     if isinstance(text, str):
+        user_list_mode = extract_user_list_mode(text)
+        if user_list_mode:
+            placeholder_ts = await post_slack_message(
+                channel,
+                "Listing Google Workspace users...",
+                thread_ts,
+            )
+            reply = await build_workspace_command_reply_safely(
+                "list users",
+                build_user_list_reply,
+                user_list_mode,
+            )
+            await finish_slack_placeholder(channel, placeholder_ts, reply, thread_ts)
+            return
+
+        groups_for_user_query = extract_groups_for_user_query(text)
+        if groups_for_user_query:
+            placeholder_ts = await post_slack_message(
+                channel,
+                f"Looking up Google Workspace groups for `{groups_for_user_query}`...",
+                thread_ts,
+            )
+            reply = await build_workspace_command_reply_safely(
+                "groups for user",
+                build_groups_for_user_reply,
+                groups_for_user_query,
+            )
+            await finish_slack_placeholder(channel, placeholder_ts, reply, thread_ts)
+            return
+
+        group_members_query = extract_group_members_query(text)
+        if group_members_query:
+            placeholder_ts = await post_slack_message(
+                channel,
+                f"Looking up Google Workspace group members for `{group_members_query}`...",
+                thread_ts,
+            )
+            reply = await build_workspace_command_reply_safely(
+                "group members",
+                build_group_members_reply,
+                group_members_query,
+            )
+            await finish_slack_placeholder(channel, placeholder_ts, reply, thread_ts)
+            return
+
+        group_lookup_query = extract_group_lookup_query(text)
+        if group_lookup_query:
+            placeholder_ts = await post_slack_message(
+                channel,
+                f"Looking up Google Workspace group `{group_lookup_query}`...",
+                thread_ts,
+            )
+            reply = await build_workspace_command_reply_safely(
+                "lookup group",
+                build_group_lookup_reply,
+                group_lookup_query,
+            )
+            await finish_slack_placeholder(channel, placeholder_ts, reply, thread_ts)
+            return
+
+        if is_list_groups_message(text):
+            placeholder_ts = await post_slack_message(
+                channel,
+                "Listing Google Workspace groups...",
+                thread_ts,
+            )
+            reply = await build_workspace_command_reply_safely(
+                "list groups",
+                build_group_list_reply,
+            )
+            await finish_slack_placeholder(channel, placeholder_ts, reply, thread_ts)
+            return
+
+        if is_list_org_units_message(text):
+            placeholder_ts = await post_slack_message(
+                channel,
+                "Listing Google Workspace org units...",
+                thread_ts,
+            )
+            reply = await build_workspace_command_reply_safely(
+                "list org units",
+                build_org_units_reply,
+            )
+            await finish_slack_placeholder(channel, placeholder_ts, reply, thread_ts)
+            return
+
+        if is_list_domains_message(text):
+            placeholder_ts = await post_slack_message(
+                channel,
+                "Listing Google Workspace domains...",
+                thread_ts,
+            )
+            reply = await build_workspace_command_reply_safely(
+                "list domains",
+                build_domains_reply,
+            )
+            await finish_slack_placeholder(channel, placeholder_ts, reply, thread_ts)
+            return
+
         user_lookup_query = extract_user_lookup_query(text)
         if user_lookup_query:
             placeholder_ts = await post_slack_message(
