@@ -25,8 +25,10 @@ ADMIN_DIRECTORY_USER_READONLY_SCOPE = (
 DEFAULT_OPENAI_MODEL = "gpt-5.4-mini"
 OPENAI_REQUEST_TIMEOUT_SECONDS = 30.0
 OPENAI_MAX_OUTPUT_TOKENS = 700
+GPT_REPLY_TIMEOUT_SECONDS = 20.0
 REQUEST_TOLERANCE_SECONDS = 60 * 5
 SLACK_POST_MESSAGE_URL = "https://slack.com/api/chat.postMessage"
+SLACK_UPDATE_MESSAGE_URL = "https://slack.com/api/chat.update"
 TRUE_VALUES = {"1", "true", "yes", "on"}
 
 logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO").upper())
@@ -114,8 +116,21 @@ def decode_json_payload(body: bytes) -> dict[str, Any]:
 
 
 def should_reply_to_event(event: dict[str, Any]) -> bool:
-    if event.get("bot_id") or event.get("subtype") == "bot_message":
+    if event.get("bot_id") or event.get("bot_profile"):
         return False
+
+    # Slack sends message_changed/message_deleted events when the bot edits
+    # its own placeholder. Only plain user messages should trigger replies.
+    if event.get("subtype"):
+        return False
+
+    nested_message = event.get("message")
+    if isinstance(nested_message, dict) and nested_message.get("bot_id"):
+        return False
+
+    if not isinstance(event.get("user"), str):
+        return False
+
     return event.get("type") in {"message", "app_mention"}
 
 
@@ -160,6 +175,27 @@ def build_test_reply(event: dict[str, Any]) -> str:
         f"{greeting}I can hear you. Slack -> Cloud Run is working, and GPT "
         "plus Google Workspace lookups are the next pieces to wire in."
     )
+
+
+def build_common_reply(text: str) -> str | None:
+    normalized = text.strip().lower()
+
+    if normalized in {"hello", "hi", "hey", "yo"}:
+        return "Hello - how can I help with Google Workspace admin?"
+
+    if normalized in {
+        "help",
+        "what can you help me with",
+        "what can you help me with?",
+    }:
+        return (
+            "I can help with Google Workspace admin questions in plain English. "
+            "Right now I can run `admin test` to confirm Admin SDK access. "
+            "Next up, we are adding live lookup tools for users, groups, org "
+            "units, suspended accounts, and device checks."
+        )
+
+    return None
 
 
 @lru_cache(maxsize=1)
@@ -235,7 +271,16 @@ async def build_gpt_reply(event: dict[str, Any]) -> str:
 
 async def build_gpt_reply_safely(event: dict[str, Any]) -> str:
     try:
-        return await build_gpt_reply(event)
+        return await asyncio.wait_for(
+            build_gpt_reply(event),
+            timeout=GPT_REPLY_TIMEOUT_SECONDS,
+        )
+    except TimeoutError:
+        logger.exception("OpenAI API request timed out.")
+        return (
+            "GPT took too long to answer that one. Try again in a moment, or "
+            "use `admin test` while we tune the model latency."
+        )
     except RuntimeError as exc:
         logger.error("OpenAI setup error: %s", exc)
         return (
@@ -373,13 +418,13 @@ async def post_slack_message(
     channel: str,
     text: str,
     thread_ts: str | None = None,
-) -> None:
+) -> str | None:
     start = time.perf_counter()
     bot_token = os.getenv("SLACK_BOT_TOKEN", "")
 
     if not bot_token:
         logger.error("SLACK_BOT_TOKEN is not configured.")
-        return
+        return None
 
     payload: dict[str, str] = {"channel": channel, "text": text}
     if thread_ts:
@@ -405,15 +450,73 @@ async def post_slack_message(
             response.status_code,
             response.text,
         )
-        return
+        return None
 
     if not response_payload.get("ok"):
         logger.error("Slack API error: %s", response_payload)
-    else:
-        logger.info(
-            "Slack message posted in %.0f ms",
-            (time.perf_counter() - start) * 1000,
+        return None
+
+    logger.info(
+        "Slack message posted in %.0f ms",
+        (time.perf_counter() - start) * 1000,
+    )
+
+    message_ts = response_payload.get("ts")
+    return message_ts if isinstance(message_ts, str) else None
+
+
+async def update_slack_message(channel: str, message_ts: str, text: str) -> bool:
+    start = time.perf_counter()
+    bot_token = os.getenv("SLACK_BOT_TOKEN", "")
+
+    if not bot_token:
+        logger.error("SLACK_BOT_TOKEN is not configured.")
+        return False
+
+    headers = {
+        "Authorization": f"Bearer {bot_token}",
+        "Content-Type": "application/json; charset=utf-8",
+    }
+    payload = {"channel": channel, "ts": message_ts, "text": text}
+
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        response = await client.post(
+            SLACK_UPDATE_MESSAGE_URL,
+            headers=headers,
+            json=payload,
         )
+
+    try:
+        response_payload = response.json()
+    except json.JSONDecodeError:
+        logger.error(
+            "Slack update returned non-JSON response: status=%s body=%s",
+            response.status_code,
+            response.text,
+        )
+        return False
+
+    if not response_payload.get("ok"):
+        logger.error("Slack update error: %s", response_payload)
+        return False
+
+    logger.info(
+        "Slack message updated in %.0f ms",
+        (time.perf_counter() - start) * 1000,
+    )
+    return True
+
+
+async def finish_slack_placeholder(
+    channel: str,
+    placeholder_ts: str | None,
+    text: str,
+    thread_ts: str | None,
+) -> None:
+    if placeholder_ts and await update_slack_message(channel, placeholder_ts, text):
+        return
+
+    await post_slack_message(channel, text, thread_ts)
 
 
 async def handle_slack_event_reply(event: dict[str, Any]) -> None:
@@ -427,26 +530,29 @@ async def handle_slack_event_reply(event: dict[str, Any]) -> None:
     thread_ts = reply_thread_ts(event)
 
     if isinstance(text, str) and is_admin_test_message(text):
-        lookup_task = asyncio.create_task(build_admin_test_reply_safely())
-
-        await post_slack_message(
+        placeholder_ts = await post_slack_message(
             channel,
             "Checking Google Workspace Admin SDK access...",
             thread_ts,
         )
 
-        reply = await lookup_task
-        await post_slack_message(channel, reply, thread_ts)
+        reply = await build_admin_test_reply_safely()
+        await finish_slack_placeholder(channel, placeholder_ts, reply, thread_ts)
         logger.info(
             "Admin test Slack flow completed in %.0f ms",
             (time.perf_counter() - start) * 1000,
         )
         return
 
-    reply_task = asyncio.create_task(build_gpt_reply_safely(event))
-    await post_slack_message(channel, "Thinking...", thread_ts)
-    reply = await reply_task
-    await post_slack_message(channel, reply, thread_ts)
+    if isinstance(text, str):
+        common_reply = build_common_reply(text)
+        if common_reply:
+            await post_slack_message(channel, common_reply, thread_ts)
+            return
+
+    placeholder_ts = await post_slack_message(channel, "Thinking...", thread_ts)
+    reply = await build_gpt_reply_safely(event)
+    await finish_slack_placeholder(channel, placeholder_ts, reply, thread_ts)
     logger.info(
         "GPT Slack flow completed in %.0f ms",
         (time.perf_counter() - start) * 1000,
