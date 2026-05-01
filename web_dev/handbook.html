@@ -71,6 +71,8 @@ body{font-family:'Poppins',sans-serif;background:var(--off-white);color:var(--te
 .content-panel h4{font-size:14px;font-weight:600;color:var(--bright-blue);margin:16px 0 8px;}
 .content-panel p{font-size:14px;line-height:1.8;color:var(--text);margin-bottom:12px;}
 .content-panel ul,.content-panel ol{padding-left:24px;margin:8px 0 14px;}
+.content-panel ul.hb-supporting-list,.content-panel ol.hb-supporting-list{margin-left:36px;padding-left:24px;}
+.content-panel ul.hb-supporting-list{list-style-type:circle;}
 .content-panel li{font-size:14px;line-height:1.75;color:var(--text);margin-bottom:6px;padding-left:2px;}
 .content-panel li>ul,.content-panel li>ol{margin:4px 0 4px;padding-left:28px;}
 .content-panel ul ul{list-style-type:circle;}
@@ -149,6 +151,7 @@ body{font-family:'Poppins',sans-serif;background:var(--off-white);color:var(--te
   .hero-title{font-size:34px;}
   .handbook-home{grid-template-columns:1fr 1fr;}
   .content-panel{padding:20px;}
+  .content-panel ul.hb-supporting-list,.content-panel ol.hb-supporting-list{margin-left:18px;}
   .uni-grid{grid-template-columns:repeat(2,1fr);}
 }
 </style>
@@ -458,13 +461,14 @@ function getContentText(el) {
   if (el.rows) parts.push(el.rows.flat().map(cell => `${toText(cell)} ${getUrls(cell).join(' ')}`));
   return parts.map(toText).filter(Boolean).join(' ');
 }
-function renderListNodes(nodes, tag) {
-  return `<${tag}>${nodes.map(node => {
+function renderListNodes(nodes, tag, className) {
+  const classAttr = className ? ` class="${className}"` : '';
+  return `<${tag}${classAttr}>${nodes.map(node => {
     const children = node.children.length ? renderListNodes(node.children, tag) : '';
     return `<li>${renderRichText(node.item)}${children}</li>`;
   }).join('')}</${tag}>`;
 }
-function renderNestedList(items, type) {
+function renderNestedList(items, type, className) {
   const tag = type === 'olist' ? 'ol' : 'ul';
   const root = { level: -1, children: [] };
   const stack = [root];
@@ -478,13 +482,17 @@ function renderNestedList(items, type) {
     stack.push(node);
   });
 
-  return renderListNodes(root.children, tag);
+  return renderListNodes(root.children, tag, className);
+}
+function isSupportingListLabel(el) {
+  const text = toText(el && el.text).trim();
+  return el && el.type === 'p' && /:\s*$/.test(text) && text.length <= 90;
 }
 
 function renderContent(content, secTitle) {
   const isUniSection = secTitle && secTitle.includes('12.');
   let uniRendered = false;
-  return content.map(el => {
+  return content.map((el, idx) => {
     if (el.type === 'h3') return `<h3${docLayoutStyle(el)}>${renderRichText(el)}</h3>`;
     if (el.type === 'h4') return `<h4${docLayoutStyle(el)}>${renderRichText(el)}</h4>`;
     if (el.type === 'embed') {
@@ -525,7 +533,8 @@ function renderContent(content, secTitle) {
       return `<div class="table-ph">📊 ${esc(el.text || 'Table')}</div>`;
     }
     if (el.type === 'list' || el.type === 'olist') {
-      return renderNestedList(el.items || [], el.type);
+      const className = isSupportingListLabel(content[idx - 1]) ? 'hb-supporting-list' : '';
+      return renderNestedList(el.items || [], el.type, className);
     }
     if (el.type === 'p') {
       const t = el.text;
