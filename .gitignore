@@ -10,3 +10,12 @@ venv/
 # Local environment/secrets
 .env
 .env.*
+!.env.example
+
+# Tee time alert local state
+integrations/tee_time_alerts/config.json
+integrations/tee_time_alerts/browser_profile/
+integrations/tee_time_alerts/debug/
+integrations/tee_time_alerts/latest_slots.json
+integrations/tee_time_alerts/notified_slots.json
+integrations/tee_time_alerts/*.log

@@ -1,0 +1,31 @@
+{
+  "course_name": "Wildwood Green Golf Club",
+  "course_url": "https://wildwoodgreenmem.ezlinksgolf.com/index.html#/login",
+  "mode": "alert_only",
+  "booking_window_days": 15,
+  "poll_seconds": 60,
+  "preferences": {
+    "days": ["saturday", "sunday"],
+    "time_start": "06:30",
+    "time_end": "09:00",
+    "players": 4,
+    "holes": 18
+  },
+  "notifications": {
+    "sms": {
+      "enabled": true,
+      "provider": "twilio",
+      "from_number": "",
+      "to_numbers": []
+    }
+  },
+  "browser": {
+    "profile_dir": "browser_profile",
+    "channel": ""
+  },
+  "limits": {
+    "max_scans_per_hour": 60,
+    "quiet_hours_start": "22:00",
+    "quiet_hours_end": "05:30"
+  }
+}
