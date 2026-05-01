@@ -66,7 +66,9 @@ const API_URL = "https://script.google.com/macros/s/AKfycbwDMZzrahIhHwlEcciQ4TcE
 const CACHE_KEY = "riseNewsletterWidget";
 const params = new URLSearchParams(window.location.search);
 const requestedMode = params.get("mode");
-const MODE = requestedMode === "full" || (!requestedMode && window.innerHeight >= 800) ? "full" : "compact";
+const hashMode = window.location.hash.toLowerCase().includes("full") ? "full" : "";
+const tallEmbedMode = !requestedMode && window.innerHeight >= 520;
+const MODE = requestedMode === "compact" ? "compact" : (requestedMode === "full" || hashMode === "full" || tallEmbedMode ? "full" : "compact");
 document.body.classList.toggle("full-mode", MODE === "full");
 
 function esc(s) {
