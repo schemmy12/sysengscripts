@@ -53,7 +53,7 @@ function doGet(e) {
 }
 
 // ── Handbook ──────────────────────────────────────────────────────────
-const HB_CACHE_KEY      = 'handbook_data_v2';
+const HB_CACHE_KEY      = 'handbook_data_v3';
 const HB_CHUNK_SIZE     = 90 * 1024;
 const HB_CACHE_TTL_SEC  = 600;
 const HB_MAX_CHUNKS     = 50;
@@ -109,6 +109,7 @@ function writeHandbookCache(str) {
 function clearHandbookCache() {
   const cache = CacheService.getScriptCache();
   cache.remove('handbook_data');
+  cache.remove('handbook_data_v2:index');
   const indexRaw = cache.get(HB_CACHE_KEY + ':index');
   const keys = [HB_CACHE_KEY + ':index'];
   if (indexRaw) {
@@ -282,6 +283,24 @@ function richTextFromElement(element) {
   }
 }
 
+function addLayoutValue(layout, key, value) {
+  if (typeof value !== 'number' || !isFinite(value) || Math.abs(value) < 0.1) return;
+  layout[key] = Math.round(value * 100) / 100;
+}
+
+function layoutFromParagraph(element) {
+  const layout = {};
+  try { addLayoutValue(layout, 'indentStart', element.getIndentStart()); } catch(e) {}
+  try { addLayoutValue(layout, 'indentFirstLine', element.getIndentFirstLine()); } catch(e) {}
+  try { addLayoutValue(layout, 'indentEnd', element.getIndentEnd()); } catch(e) {}
+  return Object.keys(layout).length ? layout : null;
+}
+
+function addLayout(payload, layout) {
+  if (layout) payload.layout = layout;
+  return payload;
+}
+
 function linkedEmbedFromRichText(rich) {
   const urls = [];
   (rich.runs || []).forEach(run => {
@@ -321,6 +340,7 @@ function parseHandbookDoc(docId) {
         const para = child.asParagraph();
         const heading = para.getHeading();
         const rich = richTextFromElement(para);
+        const layout = layoutFromParagraph(para);
         const text = rich.text;
 
         const inlineEmbedUrl = extractInlineEmbedUrl(para);
@@ -384,13 +404,14 @@ function parseHandbookDoc(docId) {
           }
 
           if (/^Screenshot\s+\d/i.test(text)) { sec.content.push({ type: 'image', text: '[Image placeholder]' }); continue; }
-          sec.content.push({ type, text, runs: rich.runs });
+          sec.content.push(addLayout({ type, text, runs: rich.runs }, layout));
         }
 
       } else if (eType === DocumentApp.ElementType.LIST_ITEM) {
         if (!sec) continue;
         const item = child.asListItem();
         const rich = richTextFromElement(item);
+        const layout = layoutFromParagraph(item);
         const text = rich.text;
         if (!text) continue;
         const level = item.getNestingLevel();
@@ -403,11 +424,12 @@ function parseHandbookDoc(docId) {
           glyph === DocumentApp.GlyphType.ROMAN_UPPER
         );
         const listType = ordered ? 'olist' : 'list';
+        const listItem = addLayout({ text, runs: rich.runs, level }, layout);
         const last = sec.content[sec.content.length - 1];
         if (last && (last.type === 'list' || last.type === 'olist')) {
-          last.items.push({ text, runs: rich.runs, level });
+          last.items.push(listItem);
         } else {
-          sec.content.push({ type: listType, items: [{ text, runs: rich.runs, level }] });
+          sec.content.push({ type: listType, items: [listItem] });
         }
 
       } else if (eType === DocumentApp.ElementType.TABLE) {
