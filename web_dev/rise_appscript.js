@@ -10,6 +10,7 @@ const DIRECTORY_FIELDS = [
   "Full Name",
   "Selection Year",
   "Fellow Bio",
+  "Profile Picture",
   "Fellow Photo",
   "Email",
   "Current Location (Country)",
@@ -121,7 +122,30 @@ function clearHandbookCache() {
 }
 
 // ── Handbook: embed URL detection helpers ─────────────────────────────
-const EMBED_URL_RE = /(https?:\/\/(?:docs\.google\.com\/(?:presentation|document|spreadsheets|forms)\/(?:d\/e\/[a-zA-Z0-9_-]+\/pub[a-zA-Z0-9_?&=\-]*|d\/[^\s]+)|drive\.google\.com\/file\/d\/[a-zA-Z0-9_-]+[^\s]*|airtable\.com\/(?:embed\/)?(?:app[a-zA-Z0-9]+\/)?shr[a-zA-Z0-9]+[^\s]*|(?:www\.)?youtube\.com\/watch\?v=[^\s&]+|youtu\.be\/[^\s]+|(?:www\.)?vimeo\.com\/\d+|(?:www\.)?loom\.com\/share\/[a-f0-9]+))/i;
+const EMBED_URL_RE = /(https?:\/\/(?:docs\.google\.com\/(?:presentation|document|spreadsheets|forms)\/(?:d\/e\/[a-zA-Z0-9_-]+\/pub[a-zA-Z0-9_?&=\-]*|d\/[^\s]+)|drive\.google\.com\/(?:file\/d\/[a-zA-Z0-9_-]+[^\s]*|(?:open|uc|thumbnail)\?[^\s]*\bid=[a-zA-Z0-9_-]+[^\s]*)|airtable\.com\/(?:embed\/)?(?:app[a-zA-Z0-9]+\/)?shr[a-zA-Z0-9]+[^\s]*|(?:www\.)?youtube\.com\/watch\?v=[^\s&]+|youtu\.be\/[^\s]+|(?:www\.)?vimeo\.com\/\d+|(?:www\.)?loom\.com\/share\/[a-f0-9]+))/i;
+
+function driveFileIdFromUrl(url) {
+  if (!url) return '';
+  let m = url.match(/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/);
+  if (m) return m[1];
+  m = url.match(/drive\.google\.com\/(?:open|uc|thumbnail)\?[^#\s]*\bid=([a-zA-Z0-9_-]+)/);
+  return m ? m[1] : '';
+}
+
+function isEmbeddableUrl(url) {
+  if (!url) return false;
+  return (
+    /docs\.google\.com\/(?:presentation|document|spreadsheets|forms)\//.test(url) ||
+    !!driveFileIdFromUrl(url) ||
+    /airtable\.com\/(?:embed\/)?(?:app[a-zA-Z0-9]+\/)?shr[a-zA-Z0-9]+/.test(url) ||
+    /(?:youtube\.com\/watch\?v=|youtu\.be\/|vimeo\.com\/\d+|loom\.com\/share\/[a-f0-9]+)/.test(url)
+  );
+}
+
+function extractIframeSrc(text) {
+  const m = String(text || '').match(/<iframe\b[^>]*\bsrc\s*=\s*["']([^"']+)["'][^>]*>/i);
+  return (m && isEmbeddableUrl(m[1])) ? m[1] : '';
+}
 
 function extractInlineEmbedUrl(para) {
   try {
@@ -159,8 +183,8 @@ function toEmbedSrc(url) {
   if (m) return `https://docs.google.com/spreadsheets/d/${m[1]}/preview`;
   m = url.match(/docs\.google\.com\/forms\/d\/([a-zA-Z0-9_-]+)/);
   if (m) return `https://docs.google.com/forms/d/${m[1]}/viewform?embedded=true`;
-  m = url.match(/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/);
-  if (m) return `https://drive.google.com/file/d/${m[1]}/preview`;
+  const driveId = driveFileIdFromUrl(url);
+  if (driveId) return `https://drive.google.com/file/d/${driveId}/preview`;
   m = url.match(/airtable\.com\/(?:embed\/)?((app[a-zA-Z0-9]+\/)?)(shr[a-zA-Z0-9]+)/);
   if (m) return `https://airtable.com/embed/${m[1]}${m[3]}?viewControls=on`;
   m = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]+)/);
@@ -177,15 +201,12 @@ function embedKind(url) {
   if (/document/.test(url))     return 'doc';
   if (/spreadsheets/.test(url)) return 'sheet';
   if (/forms/.test(url))        return 'form';
-  if (/drive\.google\.com\/file/.test(url)) {
+  if (driveFileIdFromUrl(url)) {
     try {
-      const m = url.match(/file\/d\/([a-zA-Z0-9_-]+)/);
-      if (m) {
-        const mime = DriveApp.getFileById(m[1]).getMimeType();
-        if (/^video\//.test(mime)) return 'drive-video';
-        if (/^image\//.test(mime)) return 'drive-image';
-        if (mime === 'application/pdf') return 'drive-pdf';
-      }
+      const mime = DriveApp.getFileById(driveFileIdFromUrl(url)).getMimeType();
+      if (/^video\//.test(mime)) return 'drive-video';
+      if (/^image\//.test(mime)) return 'drive-image';
+      if (mime === 'application/pdf') return 'drive-pdf';
     } catch(e) {}
     return 'drive';
   }
@@ -194,6 +215,88 @@ function embedKind(url) {
   if (/loom/.test(url))         return 'loom';
   if (/airtable\.com/.test(url)) return 'airtable';
   return 'other';
+}
+
+function copyRunAttrs(run, text) {
+  const out = { text };
+  if (run.url) out.url = run.url;
+  if (run.bold) out.bold = true;
+  if (run.italic) out.italic = true;
+  if (run.underline) out.underline = true;
+  return out;
+}
+
+function trimRichText(rich) {
+  const raw = rich.text || '';
+  const text = raw.trim();
+  if (!raw || raw === text) return rich;
+
+  const leftTrim = raw.length - raw.replace(/^\s+/, '').length;
+  const rightEdge = leftTrim + text.length;
+  let cursor = 0;
+  const runs = [];
+
+  (rich.runs || []).forEach(run => {
+    const runText = run.text || '';
+    const start = cursor;
+    const end = cursor + runText.length;
+    cursor = end;
+
+    const sliceStart = Math.max(start, leftTrim);
+    const sliceEnd = Math.min(end, rightEdge);
+    if (sliceStart >= sliceEnd) return;
+
+    runs.push(copyRunAttrs(run, runText.slice(sliceStart - start, sliceEnd - start)));
+  });
+
+  return { text, runs };
+}
+
+function richTextFromElement(element) {
+  const raw = element.getText() || '';
+  if (!raw) return { text: '', runs: [] };
+
+  try {
+    const textElement = element.editAsText();
+    const indices = textElement.getTextAttributeIndices();
+    const starts = indices && indices.length ? indices : [0];
+    const runs = [];
+
+    starts.forEach((start, idx) => {
+      const end = (idx + 1 < starts.length ? starts[idx + 1] : raw.length) - 1;
+      const runText = raw.slice(start, end + 1);
+      if (!runText) return;
+
+      const run = { text: runText };
+      const url = textElement.getLinkUrl(start);
+      if (url) run.url = url;
+      if (textElement.isBold(start)) run.bold = true;
+      if (textElement.isItalic(start)) run.italic = true;
+      if (textElement.isUnderline(start)) run.underline = true;
+      runs.push(run);
+    });
+
+    return trimRichText({ text: raw, runs });
+  } catch(e) {
+    return trimRichText({ text: raw, runs: [{ text: raw }] });
+  }
+}
+
+function linkedEmbedFromRichText(rich) {
+  const urls = [];
+  (rich.runs || []).forEach(run => {
+    if (!run || !run.url || !isEmbeddableUrl(run.url)) return;
+    if (urls.indexOf(run.url) === -1) urls.push(run.url);
+  });
+  if (urls.length !== 1) return null;
+
+  const url = urls[0];
+  const kind = embedKind(url);
+  const isVideoKind = /^(drive-video|youtube|vimeo|loom)$/.test(kind);
+  const isDriveVideoLabel = kind === 'drive' && /\b(video|tutorial|recording|webinar|watch)\b/i.test(rich.text || '');
+
+  if (isDriveVideoLabel) return { url, kind: 'drive-video' };
+  return isVideoKind ? { url, kind } : null;
 }
 
 function parseHandbookDoc(docId) {
@@ -217,12 +320,13 @@ function parseHandbookDoc(docId) {
       if (eType === DocumentApp.ElementType.PARAGRAPH) {
         const para = child.asParagraph();
         const heading = para.getHeading();
-        const text = para.getText().trim();
+        const rich = richTextFromElement(para);
+        const text = rich.text;
 
         const inlineEmbedUrl = extractInlineEmbedUrl(para);
         if (inlineEmbedUrl && sec) {
           const src = toEmbedSrc(inlineEmbedUrl);
-          sec.content.push({ type: 'embed', url: src, kind: embedKind(inlineEmbedUrl), text: '' });
+          sec.content.push({ type: 'embed', url: src, originalUrl: inlineEmbedUrl, kind: embedKind(inlineEmbedUrl), text: '' });
           continue;
         }
 
@@ -237,11 +341,23 @@ function parseHandbookDoc(docId) {
           if (heading === DocumentApp.ParagraphHeading.HEADING3) type = 'h3';
           else if (heading === DocumentApp.ParagraphHeading.HEADING4) type = 'h4';
 
+          const iframeUrl = extractIframeSrc(text);
+          if (iframeUrl) {
+            sec.content.push({
+              type: 'embed',
+              url: toEmbedSrc(iframeUrl),
+              originalUrl: iframeUrl,
+              kind: embedKind(iframeUrl),
+              text: ''
+            });
+            continue;
+          }
+
           if (/^EMBED/i.test(text)) {
             const m = text.match(EMBED_URL_RE);
             if (m) {
               const url = m[1];
-              sec.content.push({ type: 'embed', url: toEmbedSrc(url), kind: embedKind(url), text });
+              sec.content.push({ type: 'embed', url: toEmbedSrc(url), originalUrl: url, kind: embedKind(url), text });
             } else {
               sec.content.push({ type: 'embed', text });
             }
@@ -251,18 +367,31 @@ function parseHandbookDoc(docId) {
           if (EMBED_URL_RE.test(text) && text.replace(EMBED_URL_RE, '').trim() === '') {
             const m = text.match(EMBED_URL_RE);
             const url = m[1];
-            sec.content.push({ type: 'embed', url: toEmbedSrc(url), kind: embedKind(url), text: url });
+            sec.content.push({ type: 'embed', url: toEmbedSrc(url), originalUrl: url, kind: embedKind(url), text: url });
+            continue;
+          }
+
+          const linkedEmbed = linkedEmbedFromRichText(rich);
+          if (linkedEmbed) {
+            sec.content.push({
+              type: 'embed',
+              url: toEmbedSrc(linkedEmbed.url),
+              originalUrl: linkedEmbed.url,
+              kind: linkedEmbed.kind,
+              text
+            });
             continue;
           }
 
           if (/^Screenshot\s+\d/i.test(text)) { sec.content.push({ type: 'image', text: '[Image placeholder]' }); continue; }
-          sec.content.push({ type, text });
+          sec.content.push({ type, text, runs: rich.runs });
         }
 
       } else if (eType === DocumentApp.ElementType.LIST_ITEM) {
         if (!sec) continue;
         const item = child.asListItem();
-        const text = item.getText().trim();
+        const rich = richTextFromElement(item);
+        const text = rich.text;
         if (!text) continue;
         const level = item.getNestingLevel();
         const glyph = item.getGlyphType();
@@ -276,9 +405,9 @@ function parseHandbookDoc(docId) {
         const listType = ordered ? 'olist' : 'list';
         const last = sec.content[sec.content.length - 1];
         if (last && (last.type === 'list' || last.type === 'olist')) {
-          last.items.push({ text, level });
+          last.items.push({ text, runs: rich.runs, level });
         } else {
-          sec.content.push({ type: listType, items: [{ text, level }] });
+          sec.content.push({ type: listType, items: [{ text, runs: rich.runs, level }] });
         }
 
       } else if (eType === DocumentApp.ElementType.TABLE) {
@@ -294,20 +423,48 @@ function parseHandbookDoc(docId) {
             const numCells = row.getNumCells();
             const cells = [];
             for (let c = 0; c < numCells; c++) {
-              const cellText = row.getCell(c).getText().trim();
+              const rich = richTextFromElement(row.getCell(c));
+              const cellText = rich.text;
+              const iframeUrl = extractIframeSrc(cellText);
+              const linkedEmbed = linkedEmbedFromRichText(rich);
               const embedMatch = cellText.match(EMBED_URL_RE);
-              if (embedMatch && cellText.replace(EMBED_URL_RE, '').trim() === '') {
+              if (iframeUrl) {
+                cells.push({
+                  text: cellText,
+                  runs: rich.runs,
+                  embedSrc: toEmbedSrc(iframeUrl),
+                  originalUrl: iframeUrl,
+                  embedKind: embedKind(iframeUrl)
+                });
+              } else if (linkedEmbed) {
+                cells.push({
+                  text: cellText,
+                  runs: rich.runs,
+                  embedSrc: toEmbedSrc(linkedEmbed.url),
+                  originalUrl: linkedEmbed.url,
+                  embedKind: linkedEmbed.kind
+                });
+              } else if (embedMatch && cellText.replace(EMBED_URL_RE, '').trim() === '') {
                 // Cell contains only an embed URL — convert to iframe object
                 const url = embedMatch[1];
-                cells.push({ text: cellText, embedSrc: toEmbedSrc(url), embedKind: embedKind(url) });
+                cells.push({ text: cellText, runs: rich.runs, embedSrc: toEmbedSrc(url), originalUrl: url, embedKind: embedKind(url) });
               } else {
                 // Plain text cell
-                cells.push({ text: cellText });
+                cells.push({ text: cellText, runs: rich.runs });
               }
             }
             rows.push(cells);
           }
-          if (rows.length > 0) {
+          if (rows.length === 1 && rows[0].length === 1 && rows[0][0].embedSrc) {
+            const cell = rows[0][0];
+            sec.content.push({
+              type: 'embed',
+              url: cell.embedSrc,
+              originalUrl: cell.originalUrl || cell.text,
+              kind: cell.embedKind || 'other',
+              text: cell.text
+            });
+          } else if (rows.length > 0) {
             sec.content.push({ type: 'table', rows });
           } else {
             sec.content.push({ type: 'table', text: '[Empty table]' });
@@ -441,8 +598,7 @@ function directoryResponse() {
 }
 
 function normaliseDirectory(f, orgNameById) {
-  const photo = Array.isArray(f["Fellow Photo"]) && f["Fellow Photo"].length > 0
-    ? f["Fellow Photo"][0].url : "";
+  const photo = attachmentUrl(f["Profile Picture"]) || attachmentUrl(f["Fellow Photo"]);
   const undergraduateInstitution = linkedRecordText(f["Undergraduate Institution"], orgNameById);
   return {
     id:        f["Unique Contact ID"] || "",
@@ -459,6 +615,10 @@ function normaliseDirectory(f, orgNameById) {
     university: undergraduateInstitution,
     undergraduateInstitution,
   };
+}
+
+function attachmentUrl(value) {
+  return Array.isArray(value) && value.length > 0 && value[0].url ? value[0].url : "";
 }
 
 function fieldText(value) {

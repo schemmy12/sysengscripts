@@ -29,11 +29,21 @@ body{font-family:'Poppins',sans-serif;background:var(--off-white);color:var(--te
 
 /* ── Search ── */
 .search-wrap{background:#fff;border-bottom:1px solid var(--border);padding:14px 20px;position:sticky;top:0;z-index:100;}
-.search-inner{max-width:1100px;margin:0 auto;}
+.search-inner{max-width:1100px;margin:0 auto;position:relative;}
 .search-row{display:flex;align-items:center;gap:10px;border:2px solid var(--navy);border-radius:12px;padding:10px 16px;background:#fff;}
 .search-row input{flex:1;border:none;outline:none;font-size:14px;color:var(--text);font-family:'Poppins',sans-serif;}
 .search-row input::placeholder{color:var(--muted);}
 .search-row svg{color:var(--navy);flex-shrink:0;}
+.hb-search-results{display:none;position:absolute;top:calc(100% + 8px);left:0;right:0;z-index:200;background:#fff;border:1px solid var(--border);border-radius:10px;box-shadow:0 16px 36px rgba(47,65,102,.16);overflow:hidden;max-height:380px;overflow-y:auto;}
+.hb-search-results.open{display:block;}
+.hb-search-result{display:block;width:100%;padding:12px 16px;border:0;border-bottom:1px solid #edf1f7;background:#fff;text-align:left;cursor:pointer;font-family:'Poppins',sans-serif;}
+.hb-search-result:last-child{border-bottom:none;}
+.hb-search-result:hover,.hb-search-result.active{background:#f4f7ff;}
+.hb-search-result-title{font-size:13px;font-weight:700;color:var(--navy);line-height:1.35;margin-bottom:3px;}
+.hb-search-result-meta{font-size:11px;font-weight:700;color:var(--bright-blue);letter-spacing:.4px;text-transform:uppercase;margin-bottom:5px;}
+.hb-search-result-snippet{font-size:12px;color:var(--muted);line-height:1.45;}
+.hb-search-result mark{background:#fef3c7;color:var(--navy);padding:0 2px;border-radius:2px;}
+.hb-search-empty{padding:14px 16px;font-size:13px;color:var(--muted);}
 
 /* ── Layout ── */
 .handbook-layout{max-width:1100px;margin:0 auto;padding:24px 20px 60px;display:flex;gap:24px;align-items:flex-start;}
@@ -60,11 +70,17 @@ body{font-family:'Poppins',sans-serif;background:var(--off-white);color:var(--te
 .content-panel h3{font-size:15px;font-weight:700;color:var(--navy);margin:22px 0 10px;}
 .content-panel h4{font-size:14px;font-weight:600;color:var(--bright-blue);margin:16px 0 8px;}
 .content-panel p{font-size:14px;line-height:1.8;color:var(--text);margin-bottom:12px;}
-.content-panel ul,.content-panel ol{padding-left:22px;margin-bottom:14px;}
-.content-panel li{font-size:14px;line-height:1.75;color:var(--text);margin-bottom:6px;}
+.content-panel ul,.content-panel ol{padding-left:24px;margin:8px 0 14px;}
+.content-panel li{font-size:14px;line-height:1.75;color:var(--text);margin-bottom:6px;padding-left:2px;}
+.content-panel li>ul,.content-panel li>ol{margin:4px 0 4px;padding-left:28px;}
+.content-panel ul ul{list-style-type:circle;}
+.content-panel ul ul ul{list-style-type:square;}
+.content-panel ol ol{list-style-type:lower-alpha;}
+.content-panel ol ol ol{list-style-type:lower-roman;}
 .content-panel a{color:var(--bright-blue);text-decoration:none;}
 .content-panel a:hover{text-decoration:underline;}
 .content-panel strong{font-weight:600;}
+.hb-underline{text-decoration:underline;}
 .note{background:#fef9e7;border-left:4px solid var(--gold);padding:12px 16px;border-radius:0 6px 6px 0;margin:14px 0;font-size:13px;line-height:1.7;}
 .warning{background:#fff3f3;border-left:4px solid #e74c3c;padding:12px 16px;border-radius:0 6px 6px 0;margin:14px 0;font-size:13px;line-height:1.7;}
 .img-ph{background:var(--light-bg);border:2px dashed var(--border);border-radius:8px;padding:20px;text-align:center;color:var(--muted);font-size:13px;margin:14px 0;}
@@ -76,6 +92,7 @@ body{font-family:'Poppins',sans-serif;background:var(--off-white);color:var(--te
 .hb-table{width:100%;border-collapse:collapse;font-size:13px;}
 .hb-table th,.hb-table td{padding:10px 14px;text-align:left;border-bottom:1px solid var(--border);vertical-align:top;line-height:1.6;}
 .hb-table th{background:var(--navy);color:#fff;font-weight:600;font-size:12px;letter-spacing:.3px;text-transform:uppercase;white-space:nowrap;}
+.hb-table th a{color:#fff;text-decoration:underline;}
 .hb-table tr:nth-child(even) td{background:#fafbfc;}
 .hb-table tr:last-child td{border-bottom:none;}
 .hb-table a{color:var(--bright-blue);text-decoration:none;word-break:break-word;}
@@ -160,8 +177,9 @@ body{font-family:'Poppins',sans-serif;background:var(--off-white);color:var(--te
   <div class="search-inner">
     <div class="search-row">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-      <input id="hb-search" type="text" placeholder="Search the handbook…">
+      <input id="hb-search" type="text" placeholder="Search the handbook…" autocomplete="off" aria-expanded="false" aria-controls="hb-search-results">
     </div>
+    <div class="hb-search-results" id="hb-search-results" role="listbox"></div>
   </div>
 </div>
 
@@ -298,8 +316,30 @@ function autoLink(escapedText) {
     // first URLs, then emails. Trailing .,;:!? are stripped from the linked text.
     .replace(/(https?:\/\/[^\s<]+?)([.,;:!?)\]]?)(?=\s|$|<)/g,
       '<a href="$1" target="_blank" rel="noopener">$1</a>$2')
-    .replace(/(?<![\w.@])([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})(?![\w.@])/g,
-      '<a href="mailto:$1">$1</a>');
+    .replace(/(^|[^\w.@])([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})([.,;:!?)\]]?)(?=\s|$|<)/g,
+      '$1<a href="mailto:$2">$2</a>$3');
+}
+function renderRichText(value) {
+  const runs = value && Array.isArray(value.runs) ? value.runs : null;
+  if (!runs || !runs.length) return autoLink(esc(value));
+
+  return runs.map(run => {
+    if (run == null) return '';
+    const runText = typeof run === 'object' ? run.text : run;
+    let html = run && run.url ? esc(runText) : autoLink(esc(runText));
+
+    if (run && run.bold) html = `<strong>${html}</strong>`;
+    if (run && run.italic) html = `<em>${html}</em>`;
+    if (run && run.underline) html = `<span class="hb-underline">${html}</span>`;
+    if (run && run.url) html = `<a href="${escAttr(run.url)}" target="_blank" rel="noopener">${html}</a>`;
+
+    return html;
+  }).join('');
+}
+function embedFooterLabel(el, kind) {
+  const label = toText(el && el.text).replace(/^EMBED\s*:?\s*/i, '').trim();
+  if (label && !/^https?:\/\//i.test(label)) return esc(label);
+  return `Embedded ${esc(kind.replace('-', ' '))}`;
 }
 function escAttr(s) { return esc(s).replace(/"/g, '&quot;'); }
 function stripUrlPunctuation(url) { return toText(url).replace(/[.,;:!?)\]]+$/, ''); }
@@ -364,16 +404,28 @@ function getGoogleEmbed(urlText) {
 function renderInlineCell(cell) {
   const text = toText(cell);
   const urls = getUrls(cell);
+  if (cell && Array.isArray(cell.runs) && cell.runs.some(run => run && (run.url || run.bold || run.italic || run.underline))) return renderRichText(cell);
   if (urls.length === 1 && text && !text.includes(urls[0])) {
     return `<a href="${escAttr(urls[0])}" target="_blank" rel="noopener">${esc(text)}</a>`;
   }
   if (!text && urls.length) return autoLink(esc(urls.join(' ')));
   return autoLink(esc(text));
 }
-function renderTableCell(cell) {
+function getTableCellEmbed(cell) {
+  if (cell && cell.embedSrc) {
+    return {
+      src: cell.embedSrc,
+      original: cell.originalUrl || cell.text || cell.embedSrc,
+      label: cell.embedKind ? `${cell.embedKind.replace('-', ' ')} preview` : 'Embedded preview'
+    };
+  }
+
   const urls = getUrls(cell);
   const singleUrl = urls.length === 1 ? urls[0] : getSingleUrl(cell);
-  const embed = singleUrl ? getGoogleEmbed(singleUrl) : null;
+  return singleUrl ? getGoogleEmbed(singleUrl) : null;
+}
+function renderTableCell(cell) {
+  const embed = getTableCellEmbed(cell);
   if (!embed) return `<td>${renderInlineCell(cell)}</td>`;
   return `<td class="has-embed">
     <div class="hb-table-embed">
@@ -387,30 +439,52 @@ function renderTableCell(cell) {
 function getContentText(el) {
   if (!el) return '';
   const parts = [el.text, el.url];
-  if (el.items) parts.push(el.items.map(item => `${toText(item.text)} ${getUrls(item.text).join(' ')}`));
+  if (el.items) parts.push(el.items.map(item => `${toText(item)} ${getUrls(item).join(' ')}`));
   if (el.rows) parts.push(el.rows.flat().map(cell => `${toText(cell)} ${getUrls(cell).join(' ')}`));
   return parts.map(toText).filter(Boolean).join(' ');
+}
+function renderListNodes(nodes, tag) {
+  return `<${tag}>${nodes.map(node => {
+    const children = node.children.length ? renderListNodes(node.children, tag) : '';
+    return `<li>${renderRichText(node.item)}${children}</li>`;
+  }).join('')}</${tag}>`;
+}
+function renderNestedList(items, type) {
+  const tag = type === 'olist' ? 'ol' : 'ul';
+  const root = { level: -1, children: [] };
+  const stack = [root];
+
+  items.forEach(item => {
+    const level = Math.max(0, Number(item.level) || 0);
+    while (stack.length > 1 && stack[stack.length - 1].level >= level) stack.pop();
+
+    const node = { level, item, children: [] };
+    stack[stack.length - 1].children.push(node);
+    stack.push(node);
+  });
+
+  return renderListNodes(root.children, tag);
 }
 
 function renderContent(content, secTitle) {
   const isUniSection = secTitle && secTitle.includes('12.');
   let uniRendered = false;
   return content.map(el => {
-    if (el.type === 'h3') return `<h3>${esc(el.text)}</h3>`;
-    if (el.type === 'h4') return `<h4>${esc(el.text)}</h4>`;
+    if (el.type === 'h3') return `<h3>${renderRichText(el)}</h3>`;
+    if (el.type === 'h4') return `<h4>${renderRichText(el)}</h4>`;
     if (el.type === 'embed') {
       // New: parser extracted a real embed URL → render as iframe
       if (el.url) {
-        const kind = esc(el.kind || 'other');
+        const kind = toText(el.kind || 'other');
         const isVideo = /^(drive-video|youtube|vimeo|loom)$/.test(kind);
         const wrapperCls = isVideo ? 'hb-embed hb-embed-video' : 'hb-embed';
         return `<div class="${wrapperCls}">
-          <div class="hb-embed-frame ${kind}">
-            <iframe src="${esc(el.url)}" allowfullscreen loading="lazy"></iframe>
+          <div class="hb-embed-frame ${escAttr(kind)}">
+            <iframe src="${escAttr(el.url)}" allowfullscreen loading="lazy"></iframe>
           </div>
           <div class="hb-embed-footer">
-            <span>Embedded ${kind.replace('-', ' ')}</span>
-            <a href="${esc(el.url)}" target="_blank" rel="noopener">Open in new tab →</a>
+            <span>${embedFooterLabel(el, kind)}</span>
+            <a href="${escAttr(el.originalUrl || el.url)}" target="_blank" rel="noopener">Open in new tab →</a>
           </div>
         </div>`;
       }
@@ -436,20 +510,15 @@ function renderContent(content, secTitle) {
       return `<div class="table-ph">📊 ${esc(el.text || 'Table')}</div>`;
     }
     if (el.type === 'list' || el.type === 'olist') {
-      const tag = el.type === 'olist' ? 'ol' : 'ul';
-      const items = el.items.map(item => {
-        const indent = item.level > 0 ? ` style="margin-left:${item.level*16}px"` : '';
-        return `<li${indent}>${autoLink(esc(item.text))}</li>`;
-      }).join('');
-      return `<${tag}>${items}</${tag}>`;
+      return renderNestedList(el.items || [], el.type);
     }
     if (el.type === 'p') {
       const t = el.text;
       if (/^(please note|note:|important:|rise reserves|a portion or all)/i.test(t))
-        return `<div class="note">${autoLink(esc(t))}</div>`;
+        return `<div class="note">${renderRichText(el)}</div>`;
       if (/^(warning|do not|please do not|PLEASE DO NOT|if your b4b card is lost)/i.test(t))
-        return `<div class="warning">${autoLink(esc(t))}</div>`;
-      return `<p>${autoLink(esc(t))}</p>`;
+        return `<div class="warning">${renderRichText(el)}</div>`;
+      return `<p>${renderRichText(el)}</p>`;
     }
     return '';
   }).join('');
@@ -513,6 +582,7 @@ function showHome() {
   const home = document.getElementById('panel-home');
   if (home) home.classList.add('active');
   document.getElementById('hb-search').value = '';
+  closeSearchResults();
   window.scrollTo({ top:0, behavior:'smooth' });
 }
 
@@ -543,24 +613,156 @@ function openCategory(catId) {
 }
 
 // ── Search ──
-document.getElementById('hb-search').addEventListener('input', function() {
-  const q = this.value.trim().toLowerCase();
-  if (!q) { showHome(); return; }
+let hbSearchResults = [];
+let hbSearchActiveIndex = -1;
+
+function escapeRegExp(s) {
+  return toText(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+function highlightSearchText(text, terms) {
+  let html = esc(text);
+  terms
+    .filter(Boolean)
+    .sort((a,b) => b.length - a.length)
+    .forEach(term => {
+      html = html.replace(new RegExp(`(${escapeRegExp(esc(term))})`, 'ig'), '<mark>$1</mark>');
+    });
+  return html;
+}
+function sectionSearchText(sec) {
+  return `${toText(sec.title)} ${sec.content.map(getContentText).join(' ')}`.replace(/\s+/g, ' ').trim();
+}
+function getSearchSnippet(text, q) {
+  const compact = toText(text).replace(/\s+/g, ' ').trim();
+  if (!compact) return '';
+  const idx = compact.toLowerCase().indexOf(q.toLowerCase());
+  const safeIdx = idx >= 0 ? idx : 0;
+  const start = Math.max(0, safeIdx - 48);
+  const end = Math.min(compact.length, safeIdx + q.length + 110);
+  return `${start > 0 ? '...' : ''}${compact.slice(start, end)}${end < compact.length ? '...' : ''}`;
+}
+function rankedSearchResults(q) {
+  const qLower = q.toLowerCase();
+  const terms = qLower.split(/\s+/).filter(Boolean);
+  const results = [];
   let firstMatch = null;
+  if (!terms.length) return { results, firstMatch };
+
   CATS.forEach((cat, ci) => {
     cat.sections.forEach((sec, si) => {
-      const text = `${toText(sec.title)} ${sec.content.map(getContentText).join(' ')}`.toLowerCase();
       const id = `c${ci}s${si}`;
+      const title = stripNum(sec.title);
+      const catTitle = stripNum(cat.title);
+      const text = sectionSearchText(sec);
+      const haystack = `${catTitle} ${title} ${text}`.toLowerCase();
       const navBtn = document.getElementById(`nav-${id}`);
-      if (text.includes(q)) {
+      const matches = terms.every(term => haystack.includes(term));
+
+      if (matches) {
         if (navBtn) navBtn.style.display = '';
         if (!firstMatch) firstMatch = id;
+
+        let score = 0;
+        const titleLower = title.toLowerCase();
+        const catLower = catTitle.toLowerCase();
+        const textLower = text.toLowerCase();
+        if (titleLower.includes(qLower)) score += 90;
+        if (catLower.includes(qLower)) score += 45;
+        if (textLower.includes(qLower)) score += 25;
+        terms.forEach(term => {
+          if (titleLower.includes(term)) score += 30;
+          if (catLower.includes(term)) score += 12;
+          if (textLower.includes(term)) score += 5;
+        });
+        results.push({ id, title, catTitle, score, snippet: getSearchSnippet(text, q) });
       } else {
         if (navBtn) navBtn.style.display = 'none';
       }
     });
   });
-  if (firstMatch) showSection(firstMatch);
+
+  results.sort((a,b) => b.score - a.score || a.title.localeCompare(b.title));
+  return { results: results.slice(0, 8), firstMatch };
+}
+function closeSearchResults() {
+  hbSearchResults = [];
+  hbSearchActiveIndex = -1;
+  const box = document.getElementById('hb-search-results');
+  const input = document.getElementById('hb-search');
+  if (box) {
+    box.classList.remove('open');
+    box.innerHTML = '';
+  }
+  if (input) input.setAttribute('aria-expanded', 'false');
+}
+function setActiveSearchResult(index) {
+  const buttons = document.querySelectorAll('.hb-search-result');
+  if (!buttons.length) return;
+  hbSearchActiveIndex = (index + buttons.length) % buttons.length;
+  buttons.forEach((btn, i) => btn.classList.toggle('active', i === hbSearchActiveIndex));
+  buttons[hbSearchActiveIndex].scrollIntoView({ block: 'nearest' });
+}
+function openSearchResult(id) {
+  const match = id.match(/^c(\d+)s(\d+)$/);
+  if (match) {
+    const catId = `c${match[1]}`;
+    document.querySelectorAll('.cat-btn').forEach(b => b.classList.remove('open'));
+    document.querySelectorAll('.cat-sections').forEach(s => s.classList.remove('open'));
+    document.querySelector(`[data-cat="${catId}"]`)?.classList.add('open');
+    document.getElementById(`cat-${catId}`)?.classList.add('open');
+  }
+  showSection(id);
+  closeSearchResults();
+}
+function renderSearchResults(q, results) {
+  const box = document.getElementById('hb-search-results');
+  const input = document.getElementById('hb-search');
+  const terms = q.toLowerCase().split(/\s+/).filter(Boolean);
+  hbSearchResults = results;
+  hbSearchActiveIndex = results.length ? 0 : -1;
+
+  if (!q || q.length < 2) { closeSearchResults(); return; }
+  input.setAttribute('aria-expanded', 'true');
+  box.classList.add('open');
+  if (!results.length) {
+    box.innerHTML = '<div class="hb-search-empty">No matching handbook sections found.</div>';
+    return;
+  }
+
+  box.innerHTML = results.map((result, i) => `
+    <button class="hb-search-result ${i === 0 ? 'active' : ''}" type="button" data-search-id="${result.id}" role="option">
+      <div class="hb-search-result-meta">${esc(result.catTitle)}</div>
+      <div class="hb-search-result-title">${highlightSearchText(result.title, terms)}</div>
+      <div class="hb-search-result-snippet">${highlightSearchText(result.snippet, terms)}</div>
+    </button>
+  `).join('');
+  box.querySelectorAll('.hb-search-result').forEach(btn => {
+    btn.addEventListener('click', () => openSearchResult(btn.dataset.searchId));
+  });
+}
+function updateHandbookSearch() {
+  const input = document.getElementById('hb-search');
+  const q = input.value.trim();
+  if (!q) { showHome(); return; }
+  const search = rankedSearchResults(q);
+  renderSearchResults(q, search.results);
+  if (search.firstMatch) showSection(search.firstMatch);
+}
+
+document.getElementById('hb-search').addEventListener('input', updateHandbookSearch);
+document.getElementById('hb-search').addEventListener('keydown', e => {
+  const open = document.getElementById('hb-search-results').classList.contains('open');
+  if (!open) return;
+  if (e.key === 'ArrowDown') { e.preventDefault(); setActiveSearchResult(hbSearchActiveIndex + 1); }
+  if (e.key === 'ArrowUp') { e.preventDefault(); setActiveSearchResult(hbSearchActiveIndex - 1); }
+  if (e.key === 'Enter' && hbSearchResults[hbSearchActiveIndex]) {
+    e.preventDefault();
+    openSearchResult(hbSearchResults[hbSearchActiveIndex].id);
+  }
+  if (e.key === 'Escape') closeSearchResults();
+});
+document.addEventListener('click', e => {
+  if (!e.target.closest('.search-inner')) closeSearchResults();
 });
 
 // ── Fetch and init ──
