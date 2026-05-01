@@ -461,7 +461,7 @@ function getContentText(el) {
 function renderListNodes(nodes, tag) {
   return `<${tag}>${nodes.map(node => {
     const children = node.children.length ? renderListNodes(node.children, tag) : '';
-    return `<li${docLayoutStyle(node.item)}>${renderRichText(node.item)}${children}</li>`;
+    return `<li>${renderRichText(node.item)}${children}</li>`;
   }).join('')}</${tag}>`;
 }
 function renderNestedList(items, type) {
