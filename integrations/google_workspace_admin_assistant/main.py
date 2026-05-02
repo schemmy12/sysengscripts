@@ -283,7 +283,7 @@ def recent_conversation_context(history_key: str) -> str:
 
 
 def is_short_context_followup(text: str) -> bool:
-    normalized = normalize_slack_text(text).lower().strip(" .?!")
+    normalized = normalize_slack_text(text).lower().strip(" .?!#")
     if not normalized:
         return False
     if normalized.isdigit():
@@ -302,10 +302,16 @@ def is_short_context_followup(text: str) -> bool:
         "her",
         "them",
         "same",
+        "both",
+        "all",
+        "all 3",
+        "all three",
         "the first one",
         "the second one",
+        "the third one",
         "first one",
         "second one",
+        "third one",
     }:
         return True
     return len(normalized.split()) <= 3 and normalized in {
@@ -720,11 +726,64 @@ def build_test_reply(event: dict[str, Any]) -> str:
     )
 
 
+def is_org_mfa_policy_question(text: str) -> bool:
+    normalized = normalize_slack_text(text).lower()
+    mfa_terms = {
+        "2mfa",
+        "2fa",
+        "2sv",
+        "2-step",
+        "2 step",
+        "two-step",
+        "two step",
+        "mfa",
+        "multi-factor",
+        "multifactor",
+    }
+    policy_terms = {
+        "org",
+        "org-wide",
+        "org wide",
+        "tenant",
+        "company",
+        "domain",
+        "settings",
+        "policy",
+        "policies",
+        "enforced",
+        "enforcement",
+        "allowed methods",
+        "required methods",
+    }
+    return any(term in normalized for term in mfa_terms) and any(
+        term in normalized for term in policy_terms
+    )
+
+
+def build_org_mfa_policy_reply() -> str:
+    return (
+        "That is a reasonable Workspace admin question, but I do not have an "
+        "org-wide 2-Step Verification policy lookup tool wired yet. I should "
+        "not pretend I can pull tenant-level enforcement or allowed-method "
+        "settings until that backend exists.\n\n"
+        "What I can check now:\n"
+        "- Per-user 2SV enrollment/enforcement when Google returns those fields "
+        "on a user lookup\n"
+        "- Users, groups, group members, domains, devices, and admin roles\n\n"
+        "For the actual org-wide policy today, verify in Admin Console -> "
+        "Security -> Authentication -> 2-Step Verification. Next backend step "
+        "is to add a real read-only security-settings source for that policy."
+    )
+
+
 def build_common_reply(text: str) -> str | None:
     normalized = text.strip().lower()
 
     if normalized in {"hello", "hi", "hey", "yo"}:
         return "Hello - how can I help with Google Workspace admin?"
+
+    if is_org_mfa_policy_question(text):
+        return build_org_mfa_policy_reply()
 
     if normalized in {
         "help",
@@ -1418,6 +1477,8 @@ def format_workspace_user(user: dict[str, Any]) -> str:
             f"- Admin: {user_admin_label(user)}",
             f"- Org unit: {user.get('orgUnitPath') or 'Unknown'}",
             f"- Mailbox setup: {yes_no(user.get('isMailboxSetup'))}",
+            f"- 2-Step enrolled: {yes_no(user.get('isEnrolledIn2Sv'))}",
+            f"- 2-Step enforced: {yes_no(user.get('isEnforcedIn2Sv'))}",
             f"- Last login: {last_login}",
             f"- Aliases: {format_aliases(user)}",
         ]

@@ -161,9 +161,19 @@ class WorkspaceIntentTests(unittest.TestCase):
 
     def test_short_context_followup_detection(self) -> None:
         self.assertTrue(main.is_short_context_followup("2"))
+        self.assertTrue(main.is_short_context_followup("#1"))
+        self.assertTrue(main.is_short_context_followup("all 3"))
+        self.assertTrue(main.is_short_context_followup("both"))
         self.assertTrue(main.is_short_context_followup("that one"))
         self.assertTrue(main.is_short_context_followup("subscription status"))
         self.assertFalse(main.is_short_context_followup("what groups is Adam in?"))
+
+    def test_org_mfa_policy_question_gets_deterministic_boundary_reply(self) -> None:
+        reply = main.build_common_reply("what are our current org wide 2mfa settings?")
+        self.assertIsNotNone(reply)
+        assert reply is not None
+        self.assertIn("do not have an org-wide 2-Step Verification", reply)
+        self.assertIn("should not pretend", reply)
 
 
 if __name__ == "__main__":
