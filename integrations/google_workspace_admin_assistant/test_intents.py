@@ -1,0 +1,87 @@
+from __future__ import annotations
+
+import os
+import sys
+import unittest
+from pathlib import Path
+
+
+sys.path.insert(0, str(Path(__file__).parent))
+
+import main  # noqa: E402
+
+
+class WorkspaceIntentTests(unittest.TestCase):
+    def assert_intent(
+        self,
+        text: str,
+        name: str,
+        query: str | None = None,
+        mode: str | None = None,
+    ) -> None:
+        intent = main.detect_workspace_intent(text)
+        self.assertIsNotNone(intent)
+        assert intent is not None
+        self.assertEqual(intent.name, name)
+        self.assertEqual(intent.query, query)
+        self.assertEqual(intent.mode, mode)
+
+    def test_user_list_natural_language(self) -> None:
+        self.assert_intent("show me suspended users", "list_users", mode="suspended")
+        self.assert_intent("list admins", "list_users", mode="admins")
+        self.assert_intent("show all users", "list_users", mode="all")
+
+    def test_user_lookup_natural_language(self) -> None:
+        self.assert_intent("is Adam Schembri suspended?", "lookup_user", "Adam Schembri")
+        self.assert_intent(
+            "does aschembri@example.com have admin access?",
+            "lookup_user",
+            "aschembri@example.com",
+        )
+        self.assert_intent("find the account for Bruce", "lookup_user", "Bruce")
+
+    def test_group_natural_language(self) -> None:
+        self.assert_intent("what groups is Adam in?", "groups_for_user", "Adam")
+        self.assert_intent(
+            "who are the members of testgroup@example.com?",
+            "group_members",
+            "testgroup@example.com",
+        )
+        self.assert_intent("find group IT Security", "lookup_group", "IT Security")
+
+    def test_device_and_role_intents(self) -> None:
+        self.assert_intent("list devices", "list_devices", mode="all")
+        self.assert_intent("show chromebooks", "list_devices", mode="chromeos")
+        self.assert_intent("find device ABC123", "lookup_devices", "ABC123")
+        self.assert_intent("what devices does Adam have?", "lookup_devices", "Adam")
+        self.assert_intent("list admin roles", "list_roles")
+        self.assert_intent(
+            "admin roles for aschembri@example.com",
+            "role_assignments_for_user",
+            "aschembri@example.com",
+        )
+
+    def test_slack_user_allowlist_defaults_open(self) -> None:
+        old_value = os.environ.pop("SLACK_ALLOWED_USER_IDS", None)
+        try:
+            self.assertTrue(main.slack_user_allowed("U123"))
+        finally:
+            if old_value is not None:
+                os.environ["SLACK_ALLOWED_USER_IDS"] = old_value
+
+    def test_slack_user_allowlist_blocks_unknown_users(self) -> None:
+        old_value = os.environ.get("SLACK_ALLOWED_USER_IDS")
+        os.environ["SLACK_ALLOWED_USER_IDS"] = "U123,U456"
+        try:
+            self.assertTrue(main.slack_user_allowed("U123"))
+            self.assertFalse(main.slack_user_allowed("U999"))
+            self.assertFalse(main.slack_user_allowed(None))
+        finally:
+            if old_value is None:
+                os.environ.pop("SLACK_ALLOWED_USER_IDS", None)
+            else:
+                os.environ["SLACK_ALLOWED_USER_IDS"] = old_value
+
+
+if __name__ == "__main__":
+    unittest.main()

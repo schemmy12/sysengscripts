@@ -8,6 +8,7 @@ import logging
 import os
 import re
 import time
+from dataclasses import dataclass
 from functools import lru_cache
 from typing import Any
 
@@ -46,6 +47,13 @@ logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO").upper())
 logger = logging.getLogger("google_workspace_admin_assistant")
 
 app = FastAPI()
+
+
+@dataclass(frozen=True)
+class WorkspaceIntent:
+    name: str
+    query: str | None = None
+    mode: str | None = None
 
 
 def env_flag(name: str, default: bool = False) -> bool:
@@ -149,6 +157,46 @@ def is_admin_test_message(text: str) -> bool:
     return "admin test" in text.lower()
 
 
+def env_list(name: str) -> set[str]:
+    value = os.getenv(name, "")
+    if not value.strip():
+        return set()
+    return {
+        item.strip()
+        for item in re.split(r"[\s,]+", value)
+        if item.strip()
+    }
+
+
+def slack_user_allowed(user_id: str | None) -> bool:
+    allowed_users = env_list("SLACK_ALLOWED_USER_IDS")
+    if not allowed_users:
+        return True
+    return isinstance(user_id, str) and user_id in allowed_users
+
+
+def build_unauthorized_reply() -> str:
+    return (
+        "I am not enabled for your Slack account yet. Ask an admin to add your "
+        "Slack user ID to `SLACK_ALLOWED_USER_IDS` if you should have access."
+    )
+
+
+def audit_slack_action(
+    event: dict[str, Any],
+    action: str,
+    query: str | None = None,
+) -> None:
+    logger.info(
+        "Slack action audit: action=%s user=%s channel=%s team=%s query_present=%s",
+        action,
+        event.get("user"),
+        event.get("channel"),
+        event.get("team"),
+        bool(query),
+    )
+
+
 def normalize_slack_text(text: str) -> str:
     normalized = re.sub(r"<mailto:([^|>]+)\|[^>]+>", r"\1", text)
     normalized = re.sub(r"<@[A-Z0-9]+>\s*", "", normalized)
@@ -188,6 +236,31 @@ def extract_user_lookup_query(text: str) -> str | None:
     return None
 
 
+def extract_natural_user_lookup_query(text: str) -> str | None:
+    normalized = normalize_slack_text(text)
+    patterns = (
+        r"^(?:is|was)\s+(.+?)\s+suspended\??$",
+        r"^(?:is|was)\s+(.+?)\s+(?:a\s+)?(?:super\s+)?admin\??$",
+        (
+            r"^does\s+(.+?)\s+have\s+(?:super\s+)?admin\s+"
+            r"(?:access|rights|permissions)\??$"
+        ),
+        (
+            r"^(?:find|lookup|look up|show|get)\s+(?:the\s+)?"
+            r"(?:account|profile|user)\s+(?:for\s+)?(.+)$"
+        ),
+        r"^(?:find|lookup|look up|show|get)\s+(.+?)'s\s+(?:account|profile|user)\??$",
+        r"^(?:who|what)\s+is\s+(.+?)'s\s+(?:primary\s+)?email\??$",
+    )
+
+    for pattern in patterns:
+        match = re.match(pattern, normalized, re.I)
+        if match:
+            return clean_command_query(match.group(1))
+
+    return None
+
+
 def clean_command_query(query: str) -> str | None:
     cleaned = query.strip(" :?\"'")
     return cleaned or None
@@ -197,24 +270,40 @@ def extract_user_list_mode(text: str) -> str | None:
     normalized = normalize_slack_text(text)
     lower = normalized.lower().rstrip("?")
 
-    if lower in {"list users", "show users", "users", "list all users"}:
+    if lower in {
+        "list users",
+        "show users",
+        "show me users",
+        "users",
+        "list all users",
+        "show all users",
+        "show me all users",
+    }:
         return "all"
 
     if lower in {
         "list suspended users",
         "show suspended users",
+        "show me suspended users",
         "suspended users",
         "who is suspended",
         "who is suspended?",
+        "which users are suspended",
+        "which accounts are suspended",
+        "show suspended accounts",
+        "show me suspended accounts",
     }:
         return "suspended"
 
     if lower in {
         "list admins",
         "show admins",
+        "show me admins",
         "admin users",
         "list admin users",
         "list super admins",
+        "show super admins",
+        "show me super admins",
         "super admins",
     }:
         return "admins"
@@ -225,10 +314,11 @@ def extract_user_list_mode(text: str) -> str | None:
 def extract_groups_for_user_query(text: str) -> str | None:
     normalized = normalize_slack_text(text)
     patterns = (
-        r"^(?:list|show)\s+groups\s+(?:for|of)\s+(?:user\s+)?(.+)$",
+        r"^(?:list|show)(?:\s+me)?\s+groups\s+(?:for|of)\s+(?:user\s+)?(.+)$",
         r"^groups\s+(?:for|of)\s+(?:user\s+)?(.+)$",
-        r"^(?:what|which)\s+groups\s+is\s+(.+?)\s+in\??$",
+        r"^(?:what|which)\s+groups\s+is\s+(.+?)\s+(?:in|a\s+member\s+of)\??$",
         r"^(?:what|which)\s+groups\s+does\s+(.+?)\s+belong\s+to\??$",
+        r"^(?:what|which)\s+groups\s+does\s+(.+?)\s+have\??$",
     )
 
     for pattern in patterns:
@@ -317,6 +407,155 @@ def is_list_domains_message(text: str) -> bool:
     return normalized in {"list domains", "show domains", "domains"}
 
 
+def extract_device_lookup_query(text: str) -> str | None:
+    normalized = normalize_slack_text(text)
+    patterns = (
+        (
+            r"^(?:find|lookup|look up|show|get)\s+"
+            r"(?:chromeos\s+|chrome\s+|mobile\s+)?device\s+(.+)$"
+        ),
+        r"^(?:find|lookup|look up|show|get)\s+chromebook\s+(.+)$",
+        (
+            r"^(?:find|lookup|look up|show|get)\s+"
+            r"(?:devices|chrome\s+devices|chromeos\s+devices|mobile\s+devices)\s+"
+            r"(?:for|assigned\s+to|used\s+by)\s+(.+)$"
+        ),
+        r"^(?:what|which)\s+devices\s+(?:does|is)\s+(.+?)\s+(?:have|using|assigned)\??$",
+    )
+
+    for pattern in patterns:
+        match = re.match(pattern, normalized, re.I)
+        if match:
+            return clean_command_query(match.group(1))
+
+    return None
+
+
+def extract_device_list_mode(text: str) -> str | None:
+    normalized = normalize_slack_text(text).lower().rstrip("?")
+
+    if normalized in {
+        "list devices",
+        "show devices",
+        "show me devices",
+        "devices",
+        "list all devices",
+    }:
+        return "all"
+
+    if normalized in {
+        "list chrome devices",
+        "list chromeos devices",
+        "list chromebooks",
+        "show chrome devices",
+        "show chromeos devices",
+        "show chromebooks",
+        "chromebooks",
+        "chrome devices",
+        "chromeos devices",
+    }:
+        return "chromeos"
+
+    if normalized in {
+        "list mobile devices",
+        "show mobile devices",
+        "show me mobile devices",
+        "mobile devices",
+        "phones",
+        "list phones",
+        "show phones",
+    }:
+        return "mobile"
+
+    return None
+
+
+def extract_role_assignments_query(text: str) -> str | None:
+    normalized = normalize_slack_text(text)
+    patterns = (
+        r"^(?:admin\s+)?roles\s+(?:for|of)\s+(?:user\s+)?(.+)$",
+        r"^(?:list|show)\s+(?:admin\s+)?roles\s+(?:for|of)\s+(?:user\s+)?(.+)$",
+        r"^(?:what|which)\s+(?:admin\s+)?roles\s+does\s+(.+?)\s+have\??$",
+        r"^(?:what|which)\s+(?:admin\s+)?roles\s+is\s+(.+?)\s+assigned\??$",
+        r"^role\s+assignments\s+(?:for|of)\s+(.+)$",
+    )
+
+    for pattern in patterns:
+        match = re.match(pattern, normalized, re.I)
+        if match:
+            return clean_command_query(match.group(1))
+
+    return None
+
+
+def is_list_roles_message(text: str) -> bool:
+    normalized = normalize_slack_text(text).lower().rstrip("?")
+    return normalized in {
+        "list roles",
+        "show roles",
+        "admin roles",
+        "list admin roles",
+        "show admin roles",
+        "role assignments",
+        "list role assignments",
+        "show role assignments",
+    }
+
+
+def detect_workspace_intent(text: str) -> WorkspaceIntent | None:
+    if is_admin_test_message(text):
+        return WorkspaceIntent("admin_test")
+
+    user_list_mode = extract_user_list_mode(text)
+    if user_list_mode:
+        return WorkspaceIntent("list_users", mode=user_list_mode)
+
+    device_list_mode = extract_device_list_mode(text)
+    if device_list_mode:
+        return WorkspaceIntent("list_devices", mode=device_list_mode)
+
+    device_query = extract_device_lookup_query(text)
+    if device_query:
+        return WorkspaceIntent("lookup_devices", query=device_query)
+
+    role_query = extract_role_assignments_query(text)
+    if role_query:
+        return WorkspaceIntent("role_assignments_for_user", query=role_query)
+
+    groups_for_user_query = extract_groups_for_user_query(text)
+    if groups_for_user_query:
+        return WorkspaceIntent("groups_for_user", query=groups_for_user_query)
+
+    group_members_query = extract_group_members_query(text)
+    if group_members_query:
+        return WorkspaceIntent("group_members", query=group_members_query)
+
+    group_lookup_query = extract_group_lookup_query(text)
+    if group_lookup_query:
+        return WorkspaceIntent("lookup_group", query=group_lookup_query)
+
+    if is_list_groups_message(text):
+        return WorkspaceIntent("list_groups")
+
+    if is_list_org_units_message(text):
+        return WorkspaceIntent("list_org_units")
+
+    if is_list_domains_message(text):
+        return WorkspaceIntent("list_domains")
+
+    if is_list_roles_message(text):
+        return WorkspaceIntent("list_roles")
+
+    user_lookup_query = (
+        extract_user_lookup_query(text)
+        or extract_natural_user_lookup_query(text)
+    )
+    if user_lookup_query:
+        return WorkspaceIntent("lookup_user", query=user_lookup_query)
+
+    return None
+
+
 def openai_model() -> str:
     return os.getenv("OPENAI_MODEL", DEFAULT_OPENAI_MODEL).strip() or DEFAULT_OPENAI_MODEL
 
@@ -372,7 +611,9 @@ def build_common_reply(text: str) -> str | None:
             "Right now I can run `admin test`, `find user <email or name>`, "
             "`list users`, `list suspended users`, `list groups`, "
             "`groups for user <email or name>`, `members of <group>`, "
-            "`list org units`, and `list domains`."
+            "`list org units`, `list domains`, `list devices`, "
+            "`find device <serial/user>`, `list admin roles`, and "
+            "`admin roles for <user>`."
         )
 
     return None
@@ -403,7 +644,9 @@ def build_gpt_input(event: dict[str, Any], text: str) -> list[dict[str, str]]:
         "For now, live Workspace access is handled by deterministic commands "
         "like 'admin test', 'find user <email or name>', 'list users', "
         "'list suspended users', 'list groups', 'groups for user <email>', "
-        "'members of <group>', 'list org units', and 'list domains'. "
+        "'members of <group>', 'list org units', 'list domains', "
+        "'list devices', 'find device <serial/user>', 'list admin roles', "
+        "and 'admin roles for <user>'. "
         "You cannot invoke those deterministic commands yourself from a GPT "
         "reply. If the application did not already provide live lookup results, "
         "do not say you are running or checking a Workspace command. "
@@ -770,6 +1013,95 @@ def fetch_workspace_domains(
     return domains[:max_results]
 
 
+def device_query_for_chromeos(value: str) -> str:
+    safe_query = directory_query_value(value)
+    if ":" in safe_query:
+        return safe_query
+    if is_email_like(safe_query):
+        return f"user:{safe_query}"
+    return f"id:{safe_query}"
+
+
+def device_query_for_mobile(value: str) -> str:
+    safe_query = directory_query_value(value)
+    if ":" in safe_query:
+        return safe_query
+    if is_email_like(safe_query):
+        return f"email:{safe_query}*"
+    return f"serial:{safe_query}*"
+
+
+def fetch_chromeos_devices(
+    query: str | None = None,
+    max_results: int = MAX_COMMAND_RESULTS,
+) -> list[dict[str, Any]]:
+    directory = workspace_directory_service()
+    params: dict[str, Any] = {
+        "customerId": "my_customer",
+        "maxResults": max_results,
+        "projection": "FULL",
+    }
+
+    if query:
+        params["query"] = device_query_for_chromeos(query)
+
+    response = directory.chromeosdevices().list(**params).execute()
+    devices = response.get("chromeosdevices", [])
+    return devices if isinstance(devices, list) else []
+
+
+def fetch_mobile_devices(
+    query: str | None = None,
+    max_results: int = MAX_COMMAND_RESULTS,
+) -> list[dict[str, Any]]:
+    directory = workspace_directory_service()
+    params: dict[str, Any] = {
+        "customerId": "my_customer",
+        "maxResults": max_results,
+        "projection": "FULL",
+    }
+
+    if query:
+        params["query"] = device_query_for_mobile(query)
+
+    response = directory.mobiledevices().list(**params).execute()
+    devices = response.get("mobiledevices", [])
+    return devices if isinstance(devices, list) else []
+
+
+def fetch_workspace_roles(max_results: int = MAX_COMMAND_RESULTS) -> list[dict[str, Any]]:
+    directory = workspace_directory_service()
+    response = (
+        directory.roles()
+        .list(
+            customer="my_customer",
+            maxResults=max_results,
+        )
+        .execute()
+    )
+    roles = response.get("items", [])
+    return roles if isinstance(roles, list) else []
+
+
+def fetch_workspace_role_assignments(
+    user_key: str | None = None,
+    max_results: int = MAX_COMMAND_RESULTS,
+) -> list[dict[str, Any]]:
+    directory = workspace_directory_service()
+    params: dict[str, Any] = {
+        "customer": "my_customer",
+        "maxResults": max_results,
+    }
+
+    if user_key:
+        params["userKey"] = user_key
+        params["includeIndirectRoleAssignments"] = True
+
+    response = directory.roleAssignments().list(**params).execute()
+    assignments = response.get("items", [])
+    return assignments if isinstance(assignments, list) else []
+
+
 def yes_no(value: Any) -> str:
     if isinstance(value, bool):
         return "Yes" if value else "No"
@@ -1066,6 +1398,235 @@ def build_domains_reply() -> str:
     return "\n".join(lines)
 
 
+def resolve_single_user_email(query: str) -> tuple[str | None, str | None]:
+    users = find_workspace_users(query)
+
+    if not users:
+        return None, f"I could not find a Google Workspace user matching `{query}`."
+
+    if len(users) > 1:
+        lines = [f"I found {len(users)} matching users. Try one primary email:"]
+        lines.extend(
+            f"- {workspace_user_label(user)}"
+            for user in users
+            if isinstance(user, dict)
+        )
+        return None, "\n".join(lines)
+
+    primary_email = users[0].get("primaryEmail")
+    if not isinstance(primary_email, str) or not primary_email:
+        return None, f"I found `{query}`, but the user record did not include an email."
+
+    return primary_email, None
+
+
+def resolve_device_lookup_query(query: str) -> tuple[str, str | None]:
+    if ":" in query or is_email_like(query):
+        return query, None
+
+    users = find_workspace_users(query)
+    if not users:
+        return query, None
+
+    if len(users) > 1:
+        lines = [f"I found {len(users)} matching users. Try one primary email:"]
+        lines.extend(
+            f"- {workspace_user_label(user)}"
+            for user in users
+            if isinstance(user, dict)
+        )
+        return "", "\n".join(lines)
+
+    primary_email = users[0].get("primaryEmail")
+    if not isinstance(primary_email, str) or not primary_email:
+        return "", f"I found `{query}`, but the user record did not include an email."
+
+    return primary_email, None
+
+
+def chromeos_device_label(device: dict[str, Any]) -> str:
+    serial = device.get("serialNumber") or device.get("deviceId") or "unknown serial"
+    model = device.get("model") or "unknown model"
+    status = device.get("status") or "unknown status"
+    user = device.get("annotatedUser") or "no annotated user"
+    last_sync = device.get("lastSync") or "unknown last sync"
+    org_unit = device.get("orgUnitPath") or "unknown OU"
+    return (
+        f"- ChromeOS {serial} ({model}) - {status}, {user}, "
+        f"{org_unit}, last sync {last_sync}"
+    )
+
+
+def mobile_device_label(device: dict[str, Any]) -> str:
+    serial = device.get("serialNumber") or device.get("deviceId") or "unknown device"
+    model = device.get("model") or device.get("name") or "unknown model"
+    os_name = device.get("os") or device.get("type") or "unknown OS"
+    status = device.get("status") or "unknown status"
+    email_values = device.get("email")
+
+    if isinstance(email_values, list):
+        user = ", ".join(str(email) for email in email_values[:2])
+    else:
+        user = str(email_values or "unknown user")
+
+    last_sync = device.get("lastSync") or "unknown last sync"
+    return (
+        f"- Mobile {serial} ({model}, {os_name}) - {status}, {user}, "
+        f"last sync {last_sync}"
+    )
+
+
+def build_device_list_reply(mode: str) -> str:
+    lines: list[str] = []
+
+    if mode in {"all", "chromeos"}:
+        chromeos_devices = fetch_chromeos_devices()
+        if chromeos_devices:
+            lines.append(f"ChromeOS devices (showing up to {MAX_COMMAND_RESULTS}):")
+            lines.extend(
+                chromeos_device_label(device)
+                for device in chromeos_devices
+                if isinstance(device, dict)
+            )
+        elif mode == "chromeos":
+            lines.append("I did not find any ChromeOS devices.")
+
+    if mode in {"all", "mobile"}:
+        mobile_devices = fetch_mobile_devices()
+        if mobile_devices:
+            if lines:
+                lines.append("")
+            lines.append(f"Mobile devices (showing up to {MAX_COMMAND_RESULTS}):")
+            lines.extend(
+                mobile_device_label(device)
+                for device in mobile_devices
+                if isinstance(device, dict)
+            )
+        elif mode == "mobile":
+            lines.append("I did not find any mobile devices.")
+
+    return "\n".join(lines) if lines else "I did not find any Workspace devices."
+
+
+def build_device_lookup_reply(query: str) -> str:
+    resolved_query, query_error = resolve_device_lookup_query(query)
+    if query_error:
+        return query_error
+
+    chromeos_devices = fetch_chromeos_devices(resolved_query)
+    mobile_devices = fetch_mobile_devices(resolved_query)
+
+    if not chromeos_devices and not mobile_devices:
+        return (
+            f"I could not find any Workspace devices matching `{query}`. "
+            "Try an exact user email, serial number, or a device query like `id:12345`."
+        )
+
+    lines = [
+        f"Workspace devices matching `{query}` "
+        f"(showing up to {MAX_COMMAND_RESULTS} each):",
+    ]
+    if chromeos_devices:
+        lines.append("ChromeOS:")
+        lines.extend(
+            chromeos_device_label(device)
+            for device in chromeos_devices
+            if isinstance(device, dict)
+        )
+
+    if mobile_devices:
+        if chromeos_devices:
+            lines.append("")
+        lines.append("Mobile:")
+        lines.extend(
+            mobile_device_label(device)
+            for device in mobile_devices
+            if isinstance(device, dict)
+        )
+
+    return "\n".join(lines)
+
+
+def workspace_role_label(role: dict[str, Any]) -> str:
+    name = role.get("roleName") or "Unknown role"
+    role_id = role.get("roleId") or "unknown ID"
+    flags = []
+    if role.get("isSuperAdminRole"):
+        flags.append("super admin")
+    if role.get("isSystemRole"):
+        flags.append("system")
+    label = ", ".join(flags) if flags else "custom/delegated"
+    return f"- {name} (`{role_id}`) - {label}"
+
+
+def build_roles_by_id() -> dict[str, dict[str, Any]]:
+    return {
+        str(role.get("roleId")): role
+        for role in fetch_workspace_roles(max_results=100)
+        if isinstance(role, dict) and role.get("roleId") is not None
+    }
+
+
+def build_roles_reply() -> str:
+    roles = fetch_workspace_roles()
+
+    if not roles:
+        return "I did not find any Google Workspace admin roles."
+
+    lines = [f"Google Workspace admin roles (showing up to {MAX_COMMAND_RESULTS}):"]
+    lines.extend(workspace_role_label(role) for role in roles if isinstance(role, dict))
+    return "\n".join(lines)
+
+
+def build_role_assignments_reply(query: str) -> str:
+    user_email, user_error = resolve_single_user_email(query)
+    if not user_email:
+        return user_error or f"I could not resolve `{query}` to one Google Workspace user."
+
+    assignments = fetch_workspace_role_assignments(user_email)
+
+    if not assignments:
+        return f"I did not find any direct or indirect admin role assignments for `{user_email}`."
+
+    roles_by_id = build_roles_by_id()
+    lines = [
+        f"Admin role assignments for `{user_email}` "
+        f"(showing up to {MAX_COMMAND_RESULTS}):",
+    ]
+
+    for assignment in assignments:
+        if not isinstance(assignment, dict):
+            continue
+
+        role_id = str(assignment.get("roleId") or "unknown")
+        role = roles_by_id.get(role_id, {})
+        role_name = role.get("roleName") or f"role ID {role_id}"
+        scope = assignment.get("scopeType") or "unknown scope"
+        assignee_type = assignment.get("assigneeType") or "unknown assignee type"
+        lines.append(f"- {role_name} - {scope}, {assignee_type}")
+
+    return "\n".join(lines)
+
+
+def google_http_error_reply(command_name: str, exc: HttpError) -> str:
+    status_code = getattr(exc.resp, "status", None)
+    if status_code == 403:
+        return (
+            f"I reached the `{command_name}` Workspace path, but Google denied "
+            "the request. The most likely cause is a missing read-only scope, "
+            "delegated admin permission, or API access setting."
+        )
+    if status_code == 404:
+        return (
+            f"I reached the `{command_name}` Workspace path, but Google returned "
+            "not found for that object."
+        )
+    return (
+        f"I reached the `{command_name}` Workspace path, but the Admin SDK API "
+        f"call failed with status {status_code or 'unknown'}. Check Cloud Run logs."
+    )
+
+
 async def build_workspace_command_reply_safely(
     command_name: str,
     builder: Any,
@@ -1074,12 +1635,9 @@ async def build_workspace_command_reply_safely(
     start = time.perf_counter()
     try:
         return await asyncio.to_thread(builder, *args)
-    except HttpError:
+    except HttpError as exc:
         logger.exception("Google Workspace command failed: %s", command_name)
-        return (
-            f"I reached the `{command_name}` Workspace path, but the Admin SDK "
-            "API call failed. Check Cloud Run logs for the exact error."
-        )
+        return google_http_error_reply(command_name, exc)
     except Exception:
         logger.exception("Google Workspace command setup failed: %s", command_name)
         return (
@@ -1099,12 +1657,9 @@ async def build_find_user_reply_safely(query: str) -> str:
     start = time.perf_counter()
     try:
         return await asyncio.to_thread(build_find_user_reply, query)
-    except HttpError:
+    except HttpError as exc:
         logger.exception("Google Workspace user lookup failed.")
-        return (
-            "I reached the Google Workspace user lookup path, but the API call "
-            "failed. Check Cloud Run logs for the Admin SDK error."
-        )
+        return google_http_error_reply("lookup user", exc)
     except Exception:
         logger.exception("Google Workspace user lookup setup failed.")
         return (
@@ -1147,12 +1702,9 @@ async def build_admin_test_reply_safely() -> str:
     start = time.perf_counter()
     try:
         return await asyncio.to_thread(build_admin_test_reply)
-    except HttpError:
+    except HttpError as exc:
         logger.exception("Google Workspace Admin SDK request failed.")
-        return (
-            "I reached the Google Workspace Admin SDK path, but the API call "
-            "failed. Check the delegated scope, admin email, and Cloud Run logs."
-        )
+        return google_http_error_reply("admin test", exc)
     except Exception:
         logger.exception("Google Workspace Admin SDK setup failed.")
         return (
@@ -1272,6 +1824,127 @@ async def finish_slack_placeholder(
     await post_slack_message(channel, text, thread_ts)
 
 
+async def handle_workspace_intent(
+    event: dict[str, Any],
+    intent: WorkspaceIntent,
+    channel: str,
+    thread_ts: str | None,
+) -> None:
+    audit_slack_action(event, intent.name, intent.query)
+
+    if intent.name == "admin_test":
+        placeholder_ts = await post_slack_message(
+            channel,
+            "Checking Google Workspace Admin SDK access...",
+            thread_ts,
+        )
+        reply = await build_admin_test_reply_safely()
+        await finish_slack_placeholder(channel, placeholder_ts, reply, thread_ts)
+        return
+
+    if intent.name == "lookup_user" and intent.query:
+        placeholder_ts = await post_slack_message(
+            channel,
+            f"Looking up Google Workspace user `{intent.query}`...",
+            thread_ts,
+        )
+        reply = await build_find_user_reply_safely(intent.query)
+        await finish_slack_placeholder(channel, placeholder_ts, reply, thread_ts)
+        return
+
+    command_map: dict[str, tuple[str, str, Any, tuple[Any, ...]]] = {
+        "list_users": (
+            "list users",
+            "Listing Google Workspace users...",
+            build_user_list_reply,
+            (intent.mode or "all",),
+        ),
+        "groups_for_user": (
+            "groups for user",
+            f"Looking up Google Workspace groups for `{intent.query}`...",
+            build_groups_for_user_reply,
+            (intent.query,),
+        ),
+        "group_members": (
+            "group members",
+            f"Looking up Google Workspace group members for `{intent.query}`...",
+            build_group_members_reply,
+            (intent.query,),
+        ),
+        "lookup_group": (
+            "lookup group",
+            f"Looking up Google Workspace group `{intent.query}`...",
+            build_group_lookup_reply,
+            (intent.query,),
+        ),
+        "list_groups": (
+            "list groups",
+            "Listing Google Workspace groups...",
+            build_group_list_reply,
+            (),
+        ),
+        "list_org_units": (
+            "list org units",
+            "Listing Google Workspace org units...",
+            build_org_units_reply,
+            (),
+        ),
+        "list_domains": (
+            "list domains",
+            "Listing Google Workspace domains...",
+            build_domains_reply,
+            (),
+        ),
+        "list_devices": (
+            "list devices",
+            "Listing Google Workspace devices...",
+            build_device_list_reply,
+            (intent.mode or "all",),
+        ),
+        "lookup_devices": (
+            "lookup devices",
+            f"Looking up Workspace devices matching `{intent.query}`...",
+            build_device_lookup_reply,
+            (intent.query,),
+        ),
+        "list_roles": (
+            "list admin roles",
+            "Listing Google Workspace admin roles...",
+            build_roles_reply,
+            (),
+        ),
+        "role_assignments_for_user": (
+            "admin roles for user",
+            f"Looking up admin role assignments for `{intent.query}`...",
+            build_role_assignments_reply,
+            (intent.query,),
+        ),
+    }
+
+    command = command_map.get(intent.name)
+    if not command:
+        logger.warning("Unhandled Workspace intent: %s", intent)
+        await post_slack_message(
+            channel,
+            "I understood this as a Workspace lookup, but that tool is not wired yet.",
+            thread_ts,
+        )
+        return
+
+    command_name, placeholder, builder, args = command
+    if any(arg is None for arg in args):
+        await post_slack_message(
+            channel,
+            "I need a little more detail for that lookup.",
+            thread_ts,
+        )
+        return
+
+    placeholder_ts = await post_slack_message(channel, placeholder, thread_ts)
+    reply = await build_workspace_command_reply_safely(command_name, builder, *args)
+    await finish_slack_placeholder(channel, placeholder_ts, reply, thread_ts)
+
+
 async def handle_slack_event_reply(event: dict[str, Any]) -> None:
     start = time.perf_counter()
     channel = event.get("channel")
@@ -1282,138 +1955,31 @@ async def handle_slack_event_reply(event: dict[str, Any]) -> None:
     text = event.get("text", "")
     thread_ts = reply_thread_ts(event)
 
-    if isinstance(text, str) and is_admin_test_message(text):
-        placeholder_ts = await post_slack_message(
-            channel,
-            "Checking Google Workspace Admin SDK access...",
-            thread_ts,
-        )
-
-        reply = await build_admin_test_reply_safely()
-        await finish_slack_placeholder(channel, placeholder_ts, reply, thread_ts)
-        logger.info(
-            "Admin test Slack flow completed in %.0f ms",
-            (time.perf_counter() - start) * 1000,
-        )
+    user_id = event.get("user")
+    if not slack_user_allowed(user_id if isinstance(user_id, str) else None):
+        audit_slack_action(event, "unauthorized")
+        await post_slack_message(channel, build_unauthorized_reply(), thread_ts)
         return
 
     if isinstance(text, str):
-        user_list_mode = extract_user_list_mode(text)
-        if user_list_mode:
-            placeholder_ts = await post_slack_message(
-                channel,
-                "Listing Google Workspace users...",
-                thread_ts,
+        workspace_intent = detect_workspace_intent(text)
+        if workspace_intent:
+            await handle_workspace_intent(event, workspace_intent, channel, thread_ts)
+            logger.info(
+                "Workspace Slack flow completed in %.0f ms; intent=%s",
+                (time.perf_counter() - start) * 1000,
+                workspace_intent.name,
             )
-            reply = await build_workspace_command_reply_safely(
-                "list users",
-                build_user_list_reply,
-                user_list_mode,
-            )
-            await finish_slack_placeholder(channel, placeholder_ts, reply, thread_ts)
-            return
-
-        groups_for_user_query = extract_groups_for_user_query(text)
-        if groups_for_user_query:
-            placeholder_ts = await post_slack_message(
-                channel,
-                f"Looking up Google Workspace groups for `{groups_for_user_query}`...",
-                thread_ts,
-            )
-            reply = await build_workspace_command_reply_safely(
-                "groups for user",
-                build_groups_for_user_reply,
-                groups_for_user_query,
-            )
-            await finish_slack_placeholder(channel, placeholder_ts, reply, thread_ts)
-            return
-
-        group_members_query = extract_group_members_query(text)
-        if group_members_query:
-            placeholder_ts = await post_slack_message(
-                channel,
-                f"Looking up Google Workspace group members for `{group_members_query}`...",
-                thread_ts,
-            )
-            reply = await build_workspace_command_reply_safely(
-                "group members",
-                build_group_members_reply,
-                group_members_query,
-            )
-            await finish_slack_placeholder(channel, placeholder_ts, reply, thread_ts)
-            return
-
-        group_lookup_query = extract_group_lookup_query(text)
-        if group_lookup_query:
-            placeholder_ts = await post_slack_message(
-                channel,
-                f"Looking up Google Workspace group `{group_lookup_query}`...",
-                thread_ts,
-            )
-            reply = await build_workspace_command_reply_safely(
-                "lookup group",
-                build_group_lookup_reply,
-                group_lookup_query,
-            )
-            await finish_slack_placeholder(channel, placeholder_ts, reply, thread_ts)
-            return
-
-        if is_list_groups_message(text):
-            placeholder_ts = await post_slack_message(
-                channel,
-                "Listing Google Workspace groups...",
-                thread_ts,
-            )
-            reply = await build_workspace_command_reply_safely(
-                "list groups",
-                build_group_list_reply,
-            )
-            await finish_slack_placeholder(channel, placeholder_ts, reply, thread_ts)
-            return
-
-        if is_list_org_units_message(text):
-            placeholder_ts = await post_slack_message(
-                channel,
-                "Listing Google Workspace org units...",
-                thread_ts,
-            )
-            reply = await build_workspace_command_reply_safely(
-                "list org units",
-                build_org_units_reply,
-            )
-            await finish_slack_placeholder(channel, placeholder_ts, reply, thread_ts)
-            return
-
-        if is_list_domains_message(text):
-            placeholder_ts = await post_slack_message(
-                channel,
-                "Listing Google Workspace domains...",
-                thread_ts,
-            )
-            reply = await build_workspace_command_reply_safely(
-                "list domains",
-                build_domains_reply,
-            )
-            await finish_slack_placeholder(channel, placeholder_ts, reply, thread_ts)
-            return
-
-        user_lookup_query = extract_user_lookup_query(text)
-        if user_lookup_query:
-            placeholder_ts = await post_slack_message(
-                channel,
-                f"Looking up Google Workspace user `{user_lookup_query}`...",
-                thread_ts,
-            )
-            reply = await build_find_user_reply_safely(user_lookup_query)
-            await finish_slack_placeholder(channel, placeholder_ts, reply, thread_ts)
             return
 
     if isinstance(text, str):
         common_reply = build_common_reply(text)
         if common_reply:
+            audit_slack_action(event, "common_reply")
             await post_slack_message(channel, common_reply, thread_ts)
             return
 
+    audit_slack_action(event, "gpt_fallback")
     placeholder_ts = await post_slack_message(channel, "Thinking...", thread_ts)
     reply = await build_gpt_reply_safely(event)
     await finish_slack_placeholder(channel, placeholder_ts, reply, thread_ts)
