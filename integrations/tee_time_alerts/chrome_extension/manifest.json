@@ -1,0 +1,30 @@
+{
+  "manifest_version": 3,
+  "name": "Tee Time Radar",
+  "description": "Member-side alert helper for visible EZLinks tee times.",
+  "version": "0.1.0",
+  "action": {
+    "default_title": "Tee Time Radar",
+    "default_popup": "popup.html"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://wildwoodgreenmem.ezlinksgolf.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "host_permissions": [
+    "https://wildwoodgreenmem.ezlinksgolf.com/*",
+    "http://127.0.0.1:8765/*"
+  ],
+  "permissions": [
+    "alarms",
+    "notifications",
+    "storage",
+    "tabs"
+  ]
+}
