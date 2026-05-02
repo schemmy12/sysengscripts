@@ -130,6 +130,41 @@ class WorkspaceIntentTests(unittest.TestCase):
             {"intent": "list_users", "mode": "suspended", "confidence": 0.9},
         )
 
+    def test_conversation_memory_keeps_recent_turns(self) -> None:
+        key = "test-memory"
+        main.CONVERSATION_HISTORY.pop(key, None)
+        try:
+            for index in range(6):
+                main.remember_conversation_turn(
+                    key,
+                    f"user {index}",
+                    f"assistant {index}",
+                )
+
+            history = main.recent_conversation_context(key)
+            self.assertNotIn("user 0", history)
+            self.assertIn("User: user 2", history)
+            self.assertIn("Assistant: assistant 5", history)
+        finally:
+            main.CONVERSATION_HISTORY.pop(key, None)
+
+    def test_gpt_input_includes_recent_context(self) -> None:
+        messages = main.build_gpt_input(
+            {"user": "U123"},
+            "2",
+            "Assistant: Which billing option?\nUser: subscription status",
+        )
+        user_message = messages[-1]["content"]
+        self.assertIn("Recent Slack context:", user_message)
+        self.assertIn("Assistant: Which billing option?", user_message)
+        self.assertIn("Message:\n2", user_message)
+
+    def test_short_context_followup_detection(self) -> None:
+        self.assertTrue(main.is_short_context_followup("2"))
+        self.assertTrue(main.is_short_context_followup("that one"))
+        self.assertTrue(main.is_short_context_followup("subscription status"))
+        self.assertFalse(main.is_short_context_followup("what groups is Adam in?"))
+
 
 if __name__ == "__main__":
     unittest.main()
