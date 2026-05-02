@@ -475,6 +475,7 @@ def extract_role_assignments_query(text: str) -> str | None:
     patterns = (
         r"^(?:admin\s+)?roles\s+(?:for|of)\s+(?:user\s+)?(.+)$",
         r"^(?:list|show)\s+(?:admin\s+)?roles\s+(?:for|of)\s+(?:user\s+)?(.+)$",
+        r"^(?:what|which)\s+are\s+(?:the\s+)?(?:admin\s+)?roles\s+(?:for|of)\s+(.+?)\??$",
         r"^(?:what|which)\s+(?:admin\s+)?roles\s+does\s+(.+?)\s+have\??$",
         r"^(?:what|which)\s+(?:admin\s+)?roles\s+is\s+(.+?)\s+assigned\??$",
         r"^role\s+assignments\s+(?:for|of)\s+(.+)$",

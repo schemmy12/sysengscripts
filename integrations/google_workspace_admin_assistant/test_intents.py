@@ -60,6 +60,11 @@ class WorkspaceIntentTests(unittest.TestCase):
             "role_assignments_for_user",
             "aschembri@example.com",
         )
+        self.assert_intent(
+            "what are the admin roles for Adam Schembri",
+            "role_assignments_for_user",
+            "Adam Schembri",
+        )
 
     def test_slack_user_allowlist_defaults_open(self) -> None:
         old_value = os.environ.pop("SLACK_ALLOWED_USER_IDS", None)
