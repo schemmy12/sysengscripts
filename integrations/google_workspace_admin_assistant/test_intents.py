@@ -87,6 +87,49 @@ class WorkspaceIntentTests(unittest.TestCase):
             else:
                 os.environ["SLACK_ALLOWED_USER_IDS"] = old_value
 
+    def test_ai_payload_maps_to_workspace_intent(self) -> None:
+        intent = main.workspace_intent_from_ai_payload(
+            {
+                "intent": "role_assignments_for_user",
+                "query": "Adam Schembri",
+                "mode": None,
+                "confidence": 0.91,
+            }
+        )
+        self.assertEqual(
+            intent,
+            main.WorkspaceIntent(
+                "role_assignments_for_user",
+                query="Adam Schembri",
+            ),
+        )
+
+    def test_ai_payload_rejects_invalid_or_low_confidence_intents(self) -> None:
+        self.assertIsNone(
+            main.workspace_intent_from_ai_payload(
+                {"intent": "delete_user", "query": "Adam", "confidence": 1.0}
+            )
+        )
+        self.assertIsNone(
+            main.workspace_intent_from_ai_payload(
+                {"intent": "lookup_user", "query": "Adam", "confidence": 0.2}
+            )
+        )
+        self.assertIsNone(
+            main.workspace_intent_from_ai_payload(
+                {"intent": "lookup_user", "query": "", "confidence": 1.0}
+            )
+        )
+
+    def test_parse_json_object_accepts_fenced_json(self) -> None:
+        parsed = main.parse_json_object(
+            '```json\n{"intent":"list_users","mode":"suspended","confidence":0.9}\n```'
+        )
+        self.assertEqual(
+            parsed,
+            {"intent": "list_users", "mode": "suspended", "confidence": 0.9},
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

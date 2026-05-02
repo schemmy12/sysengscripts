@@ -37,6 +37,8 @@ DEFAULT_OPENAI_MODEL = "gpt-5.4-mini"
 OPENAI_REQUEST_TIMEOUT_SECONDS = 30.0
 OPENAI_MAX_OUTPUT_TOKENS = 700
 GPT_REPLY_TIMEOUT_SECONDS = 20.0
+AI_INTENT_TIMEOUT_SECONDS = 8.0
+AI_INTENT_MAX_OUTPUT_TOKENS = 250
 MAX_COMMAND_RESULTS = 10
 REQUEST_TOLERANCE_SECONDS = 60 * 5
 SLACK_POST_MESSAGE_URL = "https://slack.com/api/chat.postMessage"
@@ -54,6 +56,34 @@ class WorkspaceIntent:
     name: str
     query: str | None = None
     mode: str | None = None
+
+
+WORKSPACE_INTENT_NAMES = {
+    "lookup_user",
+    "list_users",
+    "lookup_group",
+    "list_groups",
+    "groups_for_user",
+    "group_members",
+    "list_org_units",
+    "list_domains",
+    "lookup_devices",
+    "list_devices",
+    "list_roles",
+    "role_assignments_for_user",
+}
+INTENT_MODE_VALUES = {
+    "list_users": {"all", "suspended", "admins"},
+    "list_devices": {"all", "chromeos", "mobile"},
+}
+QUERY_REQUIRED_INTENTS = {
+    "lookup_user",
+    "lookup_group",
+    "groups_for_user",
+    "group_members",
+    "lookup_devices",
+    "role_assignments_for_user",
+}
 
 
 def env_flag(name: str, default: bool = False) -> bool:
@@ -561,6 +591,11 @@ def openai_model() -> str:
     return os.getenv("OPENAI_MODEL", DEFAULT_OPENAI_MODEL).strip() or DEFAULT_OPENAI_MODEL
 
 
+def openai_intent_model() -> str:
+    value = os.getenv("OPENAI_INTENT_MODEL", "").strip()
+    return value or openai_model()
+
+
 def openai_max_output_tokens() -> int:
     value = os.getenv("OPENAI_MAX_OUTPUT_TOKENS", "").strip()
     if not value:
@@ -663,6 +698,140 @@ def build_gpt_input(event: dict[str, Any], text: str) -> list[dict[str, str]]:
         {"role": "developer", "content": developer_prompt},
         {"role": "user", "content": user_prompt},
     ]
+
+
+def build_ai_intent_input(text: str) -> list[dict[str, str]]:
+    developer_prompt = (
+        "You classify Slack messages for a private Google Workspace admin bot. "
+        "Return only compact JSON with keys: intent, query, mode, confidence. "
+        "Do not answer the user's question and do not include tenant data. "
+        "Use intent null when the message is not asking for a live Google "
+        "Workspace lookup. Allowed intents: lookup_user, list_users, "
+        "lookup_group, list_groups, groups_for_user, group_members, "
+        "list_org_units, list_domains, lookup_devices, list_devices, "
+        "list_roles, role_assignments_for_user. "
+        "Use query for the user, group, device, email, or serial target. "
+        "Use mode only for list_users: all/suspended/admins and list_devices: "
+        "all/chromeos/mobile. Examples: "
+        "'is Adam suspended?' -> lookup_user query Adam; "
+        "'what admin access does Adam have?' -> role_assignments_for_user query Adam; "
+        "'who is in IT Security?' -> group_members query IT Security; "
+        "'what groups is Bruce in?' -> groups_for_user query Bruce; "
+        "'show suspended accounts' -> list_users mode suspended; "
+        "'show chromebooks' -> list_devices mode chromeos."
+    )
+    user_prompt = f"Message:\n{text.strip()}"
+    return [
+        {"role": "developer", "content": developer_prompt},
+        {"role": "user", "content": user_prompt},
+    ]
+
+
+def parse_json_object(text: str) -> dict[str, Any] | None:
+    candidate = text.strip()
+    if not candidate:
+        return None
+
+    if candidate.startswith("```"):
+        candidate = re.sub(r"^```(?:json)?\s*", "", candidate, flags=re.I)
+        candidate = re.sub(r"\s*```$", "", candidate)
+
+    try:
+        parsed = json.loads(candidate)
+    except json.JSONDecodeError:
+        match = re.search(r"\{.*\}", candidate, re.S)
+        if not match:
+            return None
+        try:
+            parsed = json.loads(match.group(0))
+        except json.JSONDecodeError:
+            return None
+
+    return parsed if isinstance(parsed, dict) else None
+
+
+def workspace_intent_from_ai_payload(payload: dict[str, Any]) -> WorkspaceIntent | None:
+    intent_name = payload.get("intent")
+    if intent_name in {None, "", "none", "null", "unknown"}:
+        return None
+    if not isinstance(intent_name, str) or intent_name not in WORKSPACE_INTENT_NAMES:
+        return None
+
+    confidence = payload.get("confidence", 1.0)
+    if isinstance(confidence, (int, float)) and confidence < 0.6:
+        return None
+
+    query_value = payload.get("query")
+    query = (
+        clean_command_query(str(query_value))
+        if query_value not in {None, ""}
+        else None
+    )
+
+    mode_value = payload.get("mode")
+    mode = str(mode_value).strip().lower() if mode_value not in {None, ""} else None
+
+    if intent_name in QUERY_REQUIRED_INTENTS and not query:
+        return None
+
+    valid_modes = INTENT_MODE_VALUES.get(intent_name)
+    if valid_modes:
+        if mode not in valid_modes:
+            mode = "all"
+    else:
+        mode = None
+
+    return WorkspaceIntent(intent_name, query=query, mode=mode)
+
+
+async def classify_workspace_intent_with_ai(text: str) -> WorkspaceIntent | None:
+    if not env_flag("ENABLE_AI_INTENT_ROUTER", default=True):
+        return None
+    if not text.strip():
+        return None
+
+    model = openai_intent_model()
+    request = {
+        "model": model,
+        "input": build_ai_intent_input(text),
+        "max_output_tokens": AI_INTENT_MAX_OUTPUT_TOKENS,
+    }
+
+    response = await openai_client().responses.create(**request)
+    output_text = getattr(response, "output_text", "")
+    if not isinstance(output_text, str):
+        return None
+
+    payload = parse_json_object(output_text)
+    if not payload:
+        logger.warning("AI intent router returned non-JSON output.")
+        return None
+
+    intent = workspace_intent_from_ai_payload(payload)
+    logger.info(
+        "AI intent router result: model=%s intent=%s query_present=%s",
+        model,
+        intent.name if intent else None,
+        bool(intent and intent.query),
+    )
+    return intent
+
+
+async def classify_workspace_intent_safely(text: str) -> WorkspaceIntent | None:
+    try:
+        return await asyncio.wait_for(
+            classify_workspace_intent_with_ai(text),
+            timeout=AI_INTENT_TIMEOUT_SECONDS,
+        )
+    except TimeoutError:
+        logger.exception("AI intent router timed out.")
+    except RuntimeError as exc:
+        logger.error("AI intent router setup error: %s", exc)
+    except OpenAIError:
+        logger.exception("AI intent router OpenAI request failed.")
+    except Exception:
+        logger.exception("Unexpected AI intent router failure.")
+    return None
 
 
 async def build_gpt_reply(event: dict[str, Any]) -> str:
@@ -1973,11 +2142,20 @@ async def handle_slack_event_reply(event: dict[str, Any]) -> None:
             )
             return
 
-    if isinstance(text, str):
         common_reply = build_common_reply(text)
         if common_reply:
             audit_slack_action(event, "common_reply")
             await post_slack_message(channel, common_reply, thread_ts)
+            return
+
+        ai_workspace_intent = await classify_workspace_intent_safely(text)
+        if ai_workspace_intent:
+            await handle_workspace_intent(event, ai_workspace_intent, channel, thread_ts)
+            logger.info(
+                "AI-routed Workspace Slack flow completed in %.0f ms; intent=%s",
+                (time.perf_counter() - start) * 1000,
+                ai_workspace_intent.name,
+            )
             return
 
     audit_slack_action(event, "gpt_fallback")
