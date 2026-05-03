@@ -277,8 +277,22 @@ class WorkspaceIntentTests(unittest.TestCase):
             {
                 "policyQuery": {"orgUnit": "orgUnits/root"},
                 "setting": {
+                    "type": "settings/security.two_step_verification_enrollment",
+                    "value": {"allowEnrollment": True},
+                },
+            },
+            {
+                "policyQuery": {"orgUnit": "orgUnits/root"},
+                "setting": {
                     "type": "settings/security.two_step_verification_grace_period",
                     "value": {"enrollmentGracePeriod": "86400s"},
+                },
+            },
+            {
+                "policyQuery": {"orgUnit": "orgUnits/root"},
+                "setting": {
+                    "type": "settings/security.two_step_verification_sign_in_code",
+                    "value": {"backupCodeExceptionPeriod": "86400s"},
                 },
             },
         ]
@@ -294,8 +308,10 @@ class WorkspaceIntentTests(unittest.TestCase):
             reply = main.build_security_policies_reply()
 
         self.assertIn("Root OU `/`:", reply)
-        self.assertIn("- Enrollment allowed: Yes", reply)
+        self.assertEqual(reply.count("- Enrollment allowed: Yes"), 1)
         self.assertIn("- Enrollment grace period: 1 day", reply)
+        self.assertIn("- Backup-code exception period: 1 day", reply)
+        self.assertIn("OUs not listed here usually inherit", reply)
         self.assertNotIn("entity.org_units", reply)
 
     def test_sso_reply_summarizes_assignments(self) -> None:

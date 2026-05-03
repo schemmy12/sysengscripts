@@ -2577,6 +2577,7 @@ POLICY_SETTING_LABELS = {
     "security.two_step_verification_enforcement_factor": "Allowed methods",
     "security.two_step_verification_enrollment": "Enrollment allowed",
     "security.two_step_verification_grace_period": "Enrollment grace period",
+    "security.two_step_verification_sign_in_code": "Backup-code exception period",
     "security.two_step_verification_sign_in_codes": "Backup-code exception period",
 }
 
@@ -2641,6 +2642,21 @@ def friendly_policy_value_summary(policy: dict[str, Any]) -> str:
                 return friendly_value(value)
 
     return policy_value_summary(policy)
+
+
+def unique_policy_lines(policies: list[dict[str, Any]]) -> list[tuple[str, str]]:
+    lines: list[tuple[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for policy in policies:
+        setting_type = policy_setting_type(policy)
+        label = friendly_policy_setting_label(setting_type)
+        value = friendly_policy_value_summary(policy)
+        identity = (label, value)
+        if identity in seen:
+            continue
+        seen.add(identity)
+        lines.append(identity)
+    return lines
 
 
 def org_unit_resource_aliases(org_unit_id: Any) -> list[str]:
@@ -2911,12 +2927,12 @@ def build_security_policies_reply() -> str:
         ]
         for target, target_policies in grouped.items():
             lines.append(f"{target}:")
-            for policy in target_policies:
-                setting_type = policy_setting_type(policy)
-                lines.append(
-                    f"- {friendly_policy_setting_label(setting_type)}: "
-                    f"{friendly_policy_value_summary(policy)}"
-                )
+            for label, value in unique_policy_lines(target_policies):
+                lines.append(f"- {label}: {value}")
+        lines.append(
+            "OUs not listed here usually inherit from the nearest listed parent "
+            "or the root OU."
+        )
         return "\n".join(lines)
 
     display_policies = policies[:MAX_COMMAND_RESULTS]
