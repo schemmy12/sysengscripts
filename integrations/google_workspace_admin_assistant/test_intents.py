@@ -79,6 +79,14 @@ class WorkspaceIntentTests(unittest.TestCase):
             "what are our current org wide 2mfa settings?",
             "list_security_policies",
         )
+        self.assert_intent(
+            "what are our org wide 2-step verification settings?",
+            "list_security_policies",
+        )
+        self.assert_intent(
+            "do we require MFA for users?",
+            "list_security_policies",
+        )
         self.assert_intent("show sso settings", "list_sso_settings")
         self.assert_intent("chrome versions", "chrome_versions")
         self.assert_intent("chrome extensions", "chrome_apps")
@@ -191,6 +199,14 @@ class WorkspaceIntentTests(unittest.TestCase):
     def test_org_mfa_policy_question_routes_to_policy_tool(self) -> None:
         self.assert_intent(
             "what are our current org wide 2mfa settings?",
+            "list_security_policies",
+        )
+        self.assert_intent(
+            "what are our org wide 2-step verification settings?",
+            "list_security_policies",
+        )
+        self.assert_intent(
+            "are users required to use 2fa?",
             "list_security_policies",
         )
 
