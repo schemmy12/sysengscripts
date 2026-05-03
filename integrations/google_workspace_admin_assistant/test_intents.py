@@ -252,6 +252,18 @@ class WorkspaceIntentTests(unittest.TestCase):
         self.assertIn("Forbidden", summary)
         self.assertIn("Caller does not have permission.", summary)
 
+    def test_policy_value_summary_handles_nested_policy_values(self) -> None:
+        policy = {
+            "setting": {
+                "type": "settings/security.two_step_verification",
+                "value": {"enforced": True, "allowedMethods": ["security_key"]},
+            }
+        }
+
+        summary = main.policy_value_summary(policy)
+        self.assertIn("allowedMethods", summary)
+        self.assertIn("enforced", summary)
+
 
 if __name__ == "__main__":
     unittest.main()

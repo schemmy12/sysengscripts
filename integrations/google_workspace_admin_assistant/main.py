@@ -2507,6 +2507,10 @@ def compact_json(value: Any, max_chars: int = 220) -> str:
     return truncate_text(rendered, max_chars=max_chars)
 
 
+def value_present(value: Any) -> bool:
+    return value is not None and value != ""
+
+
 def first_dict_list(data: dict[str, Any], *keys: str) -> list[dict[str, Any]]:
     for key in keys:
         value = data.get(key)
@@ -2530,7 +2534,7 @@ def policy_value_summary(policy: dict[str, Any]) -> str:
     if isinstance(setting, dict):
         for key in ("value", "effectiveValue"):
             value = setting.get(key)
-            if value not in {None, ""}:
+            if value_present(value):
                 return compact_json(value)
         setting_copy = {
             key: value
@@ -2542,7 +2546,7 @@ def policy_value_summary(policy: dict[str, Any]) -> str:
 
     for key in ("policyQuery", "target", "value"):
         value = policy.get(key)
-        if value not in {None, ""}:
+        if value_present(value):
             return compact_json(value)
 
     return "No value returned"
