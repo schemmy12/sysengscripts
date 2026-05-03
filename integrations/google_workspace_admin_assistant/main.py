@@ -1662,7 +1662,7 @@ def fetch_workspace_org_units(
         directory.orgunits()
         .list(
             customerId="my_customer",
-            type="ALL_INCLUDING_PARENT",
+            type="allIncludingParent",
         )
         .execute()
     )
@@ -1992,6 +1992,7 @@ def fetch_chrome_telemetry_devices(
         .list(
             parent="customers/my_customer",
             pageSize=max_results,
+            readMask="name,org_unit_id,device_id,serial_number",
         )
         .execute()
     )
@@ -2914,11 +2915,44 @@ def run_scope_check_step(label: str, builder: Any) -> str:
             return f"- OK {label}: response received"
         return f"- OK {label}: {result}"
     except HttpError as exc:
-        status_code = getattr(exc.resp, "status", "unknown")
-        return f"- FAIL {label}: Google API status {status_code}"
+        return f"- FAIL {label}: {google_http_error_summary(exc)}"
     except Exception as exc:
         logger.exception("Scope check failed for %s", label)
         return f"- FAIL {label}: {type(exc).__name__}"
+
+
+def google_http_error_summary(exc: HttpError, max_chars: int = 140) -> str:
+    status_code = getattr(exc.resp, "status", None)
+    reason = getattr(exc.resp, "reason", None)
+    content = getattr(exc, "content", b"")
+    detail = ""
+
+    if isinstance(content, bytes):
+        content_text = content.decode("utf-8", errors="replace")
+    else:
+        content_text = str(content or "")
+
+    if content_text:
+        try:
+            payload = json.loads(content_text)
+        except json.JSONDecodeError:
+            detail = content_text
+        else:
+            error = payload.get("error") if isinstance(payload, dict) else None
+            if isinstance(error, dict):
+                detail = (
+                    error.get("message")
+                    or error.get("status")
+                    or error.get("reason")
+                    or ""
+                )
+
+    summary = f"Google API status {status_code or 'unknown'}"
+    if reason:
+        summary += f" {reason}"
+    if detail:
+        summary += f" - {truncate_text(str(detail), max_chars=max_chars)}"
+    return summary
 
 
 def build_admin_scope_check_reply() -> str:

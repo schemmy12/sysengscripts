@@ -221,6 +221,21 @@ class WorkspaceIntentTests(unittest.TestCase):
             )
             self.assertNotIn(scope, forbidden_scopes)
 
+    def test_google_http_error_summary_extracts_message(self) -> None:
+        class Response:
+            status = 403
+            reason = "Forbidden"
+
+        exc = main.HttpError(
+            Response(),
+            b'{"error":{"message":"Caller does not have permission."}}',
+        )
+
+        summary = main.google_http_error_summary(exc)
+        self.assertIn("Google API status 403", summary)
+        self.assertIn("Forbidden", summary)
+        self.assertIn("Caller does not have permission.", summary)
+
 
 if __name__ == "__main__":
     unittest.main()
