@@ -10,6 +10,7 @@ import re
 import time
 from collections import defaultdict
 from dataclasses import dataclass
+from datetime import date, timedelta
 from functools import lru_cache
 from typing import Any
 
@@ -97,6 +98,21 @@ WORKSPACE_INTENT_NAMES = {
     "list_devices",
     "list_roles",
     "role_assignments_for_user",
+    "admin_scope_check",
+    "list_calendar_resources",
+    "list_user_schemas",
+    "list_printers",
+    "list_data_transfers",
+    "list_transfer_apps",
+    "recent_login_activity",
+    "customer_usage_report",
+    "list_security_policies",
+    "list_sso_settings",
+    "chrome_versions",
+    "chrome_apps",
+    "chrome_profiles",
+    "chrome_telemetry",
+    "chrome_policy_schemas",
 }
 INTENT_MODE_VALUES = {
     "list_users": {"all", "suspended", "admins"},
@@ -650,9 +666,263 @@ def is_list_roles_message(text: str) -> bool:
     }
 
 
+def is_scope_check_message(text: str) -> bool:
+    normalized = normalize_slack_text(text).lower().rstrip("?")
+    return normalized in {
+        "admin scope check",
+        "scope check",
+        "check scopes",
+        "test scopes",
+        "test all scopes",
+        "test admin scopes",
+        "test all admin scopes",
+        "check admin scopes",
+        "check read only scopes",
+        "check read-only scopes",
+        "what admin scopes are working",
+        "what workspace scopes are working",
+    }
+
+
+def is_list_calendar_resources_message(text: str) -> bool:
+    normalized = normalize_slack_text(text).lower().rstrip("?")
+    return normalized in {
+        "list calendar resources",
+        "show calendar resources",
+        "calendar resources",
+        "list rooms",
+        "show rooms",
+        "rooms",
+        "list meeting rooms",
+        "show meeting rooms",
+        "meeting rooms",
+    }
+
+
+def is_list_user_schemas_message(text: str) -> bool:
+    normalized = normalize_slack_text(text).lower().rstrip("?")
+    return normalized in {
+        "list user schemas",
+        "show user schemas",
+        "custom user schemas",
+        "list custom user fields",
+        "show custom user fields",
+        "custom user fields",
+    }
+
+
+def is_list_printers_message(text: str) -> bool:
+    normalized = normalize_slack_text(text).lower().rstrip("?")
+    return normalized in {
+        "list printers",
+        "show printers",
+        "printers",
+        "chrome printers",
+        "list chrome printers",
+        "show chrome printers",
+    }
+
+
+def is_list_data_transfers_message(text: str) -> bool:
+    normalized = normalize_slack_text(text).lower().rstrip("?")
+    return normalized in {
+        "list data transfers",
+        "show data transfers",
+        "data transfers",
+        "transfer requests",
+        "list transfer requests",
+        "show transfer requests",
+    }
+
+
+def is_list_transfer_apps_message(text: str) -> bool:
+    normalized = normalize_slack_text(text).lower().rstrip("?")
+    return normalized in {
+        "list transfer apps",
+        "show transfer apps",
+        "data transfer apps",
+        "transfer applications",
+        "list data transfer apps",
+        "show data transfer apps",
+    }
+
+
+def is_recent_login_activity_message(text: str) -> bool:
+    normalized = normalize_slack_text(text).lower().rstrip("?")
+    return normalized in {
+        "recent login activity",
+        "show recent login activity",
+        "list recent login activity",
+        "recent login audit",
+        "show recent login audit",
+        "login audit",
+        "login events",
+        "recent login events",
+    }
+
+
+def is_customer_usage_report_message(text: str) -> bool:
+    normalized = normalize_slack_text(text).lower().rstrip("?")
+    return normalized in {
+        "customer usage report",
+        "workspace usage report",
+        "usage report",
+        "show usage report",
+        "show workspace usage",
+        "tenant usage report",
+    }
+
+
+def is_security_policies_message(text: str) -> bool:
+    normalized = normalize_slack_text(text).lower().rstrip("?")
+    if normalized in {
+        "security policies",
+        "list security policies",
+        "show security policies",
+        "workspace security policies",
+        "google workspace security policies",
+        "2sv settings",
+        "2fa settings",
+        "2mfa settings",
+        "two step verification settings",
+        "2-step verification settings",
+        "org wide 2sv settings",
+        "org-wide 2sv settings",
+        "org wide 2fa settings",
+        "org-wide 2fa settings",
+        "org wide 2mfa settings",
+        "org-wide 2mfa settings",
+    }:
+        return True
+    return bool(
+        re.search(r"\b(?:2sv|2fa|2mfa|two[-\s]?step)\b", normalized)
+        and re.search(r"\b(?:setting|settings|policy|policies|enforced|enforcement)\b", normalized)
+    )
+
+
+def is_sso_settings_message(text: str) -> bool:
+    normalized = normalize_slack_text(text).lower().rstrip("?")
+    return normalized in {
+        "sso settings",
+        "show sso settings",
+        "list sso settings",
+        "single sign on settings",
+        "single sign-on settings",
+        "inbound sso settings",
+        "saml settings",
+        "oidc settings",
+    }
+
+
+def is_chrome_versions_message(text: str) -> bool:
+    normalized = normalize_slack_text(text).lower().rstrip("?")
+    return normalized in {
+        "chrome versions",
+        "show chrome versions",
+        "list chrome versions",
+        "chrome browser versions",
+        "managed chrome versions",
+    }
+
+
+def is_chrome_apps_message(text: str) -> bool:
+    normalized = normalize_slack_text(text).lower().rstrip("?")
+    return normalized in {
+        "chrome apps",
+        "show chrome apps",
+        "list chrome apps",
+        "installed chrome apps",
+        "chrome extensions",
+        "list chrome extensions",
+        "show chrome extensions",
+    }
+
+
+def is_chrome_profiles_message(text: str) -> bool:
+    normalized = normalize_slack_text(text).lower().rstrip("?")
+    return normalized in {
+        "chrome profiles",
+        "show chrome profiles",
+        "list chrome profiles",
+        "managed chrome profiles",
+        "browser profiles",
+        "list browser profiles",
+    }
+
+
+def is_chrome_telemetry_message(text: str) -> bool:
+    normalized = normalize_slack_text(text).lower().rstrip("?")
+    return normalized in {
+        "chrome telemetry",
+        "show chrome telemetry",
+        "list chrome telemetry",
+        "chrome telemetry devices",
+        "chromeos telemetry",
+        "list chromeos telemetry",
+    }
+
+
+def is_chrome_policy_schemas_message(text: str) -> bool:
+    normalized = normalize_slack_text(text).lower().rstrip("?")
+    return normalized in {
+        "chrome policies",
+        "show chrome policies",
+        "list chrome policies",
+        "chrome policy schemas",
+        "show chrome policy schemas",
+        "list chrome policy schemas",
+        "chrome browser policies",
+    }
+
+
 def detect_workspace_intent(text: str) -> WorkspaceIntent | None:
     if is_admin_test_message(text):
         return WorkspaceIntent("admin_test")
+
+    if is_scope_check_message(text):
+        return WorkspaceIntent("admin_scope_check")
+
+    if is_security_policies_message(text):
+        return WorkspaceIntent("list_security_policies")
+
+    if is_sso_settings_message(text):
+        return WorkspaceIntent("list_sso_settings")
+
+    if is_list_calendar_resources_message(text):
+        return WorkspaceIntent("list_calendar_resources")
+
+    if is_list_user_schemas_message(text):
+        return WorkspaceIntent("list_user_schemas")
+
+    if is_list_printers_message(text):
+        return WorkspaceIntent("list_printers")
+
+    if is_list_data_transfers_message(text):
+        return WorkspaceIntent("list_data_transfers")
+
+    if is_list_transfer_apps_message(text):
+        return WorkspaceIntent("list_transfer_apps")
+
+    if is_recent_login_activity_message(text):
+        return WorkspaceIntent("recent_login_activity")
+
+    if is_customer_usage_report_message(text):
+        return WorkspaceIntent("customer_usage_report")
+
+    if is_chrome_versions_message(text):
+        return WorkspaceIntent("chrome_versions")
+
+    if is_chrome_apps_message(text):
+        return WorkspaceIntent("chrome_apps")
+
+    if is_chrome_profiles_message(text):
+        return WorkspaceIntent("chrome_profiles")
+
+    if is_chrome_telemetry_message(text):
+        return WorkspaceIntent("chrome_telemetry")
+
+    if is_chrome_policy_schemas_message(text):
+        return WorkspaceIntent("chrome_policy_schemas")
 
     user_list_mode = extract_user_list_mode(text)
     if user_list_mode:
@@ -819,7 +1089,12 @@ def build_common_reply(text: str) -> str | None:
             "`groups for user <email or name>`, `members of <group>`, "
             "`list org units`, `list domains`, `list devices`, "
             "`find device <serial/user>`, `list admin roles`, and "
-            "`admin roles for <user>`."
+            "`admin roles for <user>`. I can also run `admin scope check`, "
+            "`calendar resources`, `user schemas`, `printers`, "
+            "`data transfers`, `recent login audit`, `usage report`, "
+            "`security policies`, `sso settings`, `chrome versions`, "
+            "`chrome apps`, `chrome profiles`, `chrome telemetry`, and "
+            "`chrome policies`."
         )
 
     return None
@@ -891,7 +1166,12 @@ def build_ai_intent_input(text: str) -> list[dict[str, str]]:
         "Workspace lookup. Allowed intents: lookup_user, list_users, "
         "lookup_group, list_groups, groups_for_user, group_members, "
         "list_org_units, list_domains, lookup_devices, list_devices, "
-        "list_roles, role_assignments_for_user. "
+        "list_roles, role_assignments_for_user, admin_scope_check, "
+        "list_calendar_resources, list_user_schemas, list_printers, "
+        "list_data_transfers, list_transfer_apps, recent_login_activity, "
+        "customer_usage_report, list_security_policies, list_sso_settings, "
+        "chrome_versions, chrome_apps, chrome_profiles, chrome_telemetry, "
+        "chrome_policy_schemas. "
         "Use query for the user, group, device, email, or serial target. "
         "Use mode only for list_users: all/suspended/admins and list_devices: "
         "all/chromeos/mobile. Examples: "
@@ -900,7 +1180,13 @@ def build_ai_intent_input(text: str) -> list[dict[str, str]]:
         "'who is in IT Security?' -> group_members query IT Security; "
         "'what groups is Bruce in?' -> groups_for_user query Bruce; "
         "'show suspended accounts' -> list_users mode suspended; "
-        "'show chromebooks' -> list_devices mode chromeos."
+        "'show chromebooks' -> list_devices mode chromeos; "
+        "'what are our org-wide 2SV settings?' -> list_security_policies; "
+        "'show SSO settings' -> list_sso_settings; "
+        "'show meeting rooms' -> list_calendar_resources; "
+        "'recent login audit' -> recent_login_activity; "
+        "'test all read-only scopes' -> admin_scope_check; "
+        "'show Chrome extensions' -> chrome_apps."
     )
     user_prompt = f"Message:\n{text.strip()}"
     return [
@@ -1082,8 +1368,7 @@ async def build_gpt_reply_safely(
 
 
 @lru_cache(maxsize=1)
-def workspace_directory_service():
-    start = time.perf_counter()
+def workspace_credentials():
     admin_email = os.getenv("GOOGLE_WORKSPACE_ADMIN_EMAIL", "").strip()
     service_account_json = os.getenv(
         "GOOGLE_WORKSPACE_SERVICE_ACCOUNT_JSON",
@@ -1103,22 +1388,52 @@ def workspace_directory_service():
             "GOOGLE_WORKSPACE_SERVICE_ACCOUNT_JSON is not valid JSON."
         ) from exc
 
-    credentials = service_account.Credentials.from_service_account_info(
+    return service_account.Credentials.from_service_account_info(
         service_account_info,
         scopes=GOOGLE_WORKSPACE_READONLY_SCOPES,
     ).with_subject(admin_email)
 
-    directory = build(
-        "admin",
-        "directory_v1",
-        credentials=credentials,
+
+@lru_cache(maxsize=16)
+def workspace_google_service(api_name: str, api_version: str):
+    start = time.perf_counter()
+    service = build(
+        api_name,
+        api_version,
+        credentials=workspace_credentials(),
         cache_discovery=False,
     )
     logger.info(
-        "Workspace Directory client built in %.0f ms",
+        "Workspace Google service built in %.0f ms; api=%s version=%s",
         (time.perf_counter() - start) * 1000,
+        api_name,
+        api_version,
     )
-    return directory
+    return service
+
+
+def workspace_directory_service():
+    return workspace_google_service("admin", "directory_v1")
+
+
+def workspace_reports_service():
+    return workspace_google_service("admin", "reports_v1")
+
+
+def workspace_data_transfer_service():
+    return workspace_google_service("admin", "datatransfer_v1")
+
+
+def workspace_cloud_identity_service():
+    return workspace_google_service("cloudidentity", "v1")
+
+
+def workspace_chrome_management_service():
+    return workspace_google_service("chromemanagement", "v1")
+
+
+def workspace_chrome_policy_service():
+    return workspace_google_service("chromepolicy", "v1")
 
 
 def fetch_workspace_user_sample(max_results: int = 5) -> list[dict[str, Any]]:
@@ -1455,6 +1770,251 @@ def fetch_workspace_role_assignments(
     response = directory.roleAssignments().list(**params).execute()
     assignments = response.get("items", [])
     return assignments if isinstance(assignments, list) else []
+
+
+def fetch_calendar_resources(max_results: int = MAX_COMMAND_RESULTS) -> list[dict[str, Any]]:
+    directory = workspace_directory_service()
+    response = (
+        directory.resources()
+        .calendars()
+        .list(
+            customer="my_customer",
+            maxResults=max_results,
+        )
+        .execute()
+    )
+    resources = (
+        response.get("items")
+        or response.get("calendarResources")
+        or response.get("resources")
+        or []
+    )
+    return resources if isinstance(resources, list) else []
+
+
+def fetch_user_schemas(max_results: int = MAX_COMMAND_RESULTS) -> list[dict[str, Any]]:
+    directory = workspace_directory_service()
+    response = directory.schemas().list(customerId="my_customer").execute()
+    schemas = response.get("schemas", [])
+    if not isinstance(schemas, list):
+        return []
+    return schemas[:max_results]
+
+
+def fetch_chrome_printers(max_results: int = MAX_COMMAND_RESULTS) -> list[dict[str, Any]]:
+    directory = workspace_directory_service()
+    response = (
+        directory.customers()
+        .chrome()
+        .printers()
+        .list(
+            parent="customers/my_customer",
+            pageSize=max_results,
+        )
+        .execute()
+    )
+    printers = response.get("printers", [])
+    return printers if isinstance(printers, list) else []
+
+
+def fetch_data_transfer_applications(
+    max_results: int = MAX_COMMAND_RESULTS,
+) -> list[dict[str, Any]]:
+    data_transfer = workspace_data_transfer_service()
+    response = (
+        data_transfer.applications()
+        .list(
+            customerId="my_customer",
+            maxResults=max_results,
+        )
+        .execute()
+    )
+    applications = response.get("applications", [])
+    return applications if isinstance(applications, list) else []
+
+
+def fetch_data_transfers(max_results: int = MAX_COMMAND_RESULTS) -> list[dict[str, Any]]:
+    data_transfer = workspace_data_transfer_service()
+    response = (
+        data_transfer.transfers()
+        .list(
+            customerId="my_customer",
+            maxResults=max_results,
+        )
+        .execute()
+    )
+    transfers = response.get("dataTransfers", [])
+    return transfers if isinstance(transfers, list) else []
+
+
+def reports_date(days_back: int = 3) -> str:
+    return (date.today() - timedelta(days=days_back)).isoformat()
+
+
+def fetch_recent_login_activities(
+    max_results: int = MAX_COMMAND_RESULTS,
+) -> list[dict[str, Any]]:
+    reports = workspace_reports_service()
+    response = (
+        reports.activities()
+        .list(
+            userKey="all",
+            applicationName="login",
+            maxResults=max_results,
+        )
+        .execute()
+    )
+    items = response.get("items", [])
+    return items if isinstance(items, list) else []
+
+
+def fetch_customer_usage_report(report_date: str | None = None) -> dict[str, Any]:
+    reports = workspace_reports_service()
+    response = (
+        reports.customerUsageReports()
+        .get(date=report_date or reports_date())
+        .execute()
+    )
+    return response if isinstance(response, dict) else {}
+
+
+def fetch_cloud_identity_policies(
+    policy_filter: str | None = None,
+    max_results: int = MAX_COMMAND_RESULTS,
+) -> list[dict[str, Any]]:
+    cloud_identity = workspace_cloud_identity_service()
+    params: dict[str, Any] = {"pageSize": max_results}
+    if policy_filter:
+        params["filter"] = policy_filter
+    response = cloud_identity.policies().list(**params).execute()
+    policies = response.get("policies", [])
+    return policies if isinstance(policies, list) else []
+
+
+def fetch_security_policies(max_results: int = MAX_COMMAND_RESULTS) -> list[dict[str, Any]]:
+    try:
+        return fetch_cloud_identity_policies(
+            "setting.type.matches('^settings/security[.].*$')",
+            max_results=max_results,
+        )
+    except HttpError as exc:
+        if getattr(exc.resp, "status", None) != 400:
+            raise
+        policies = fetch_cloud_identity_policies(max_results=100)
+        security_policies = [
+            policy
+            for policy in policies
+            if "security." in policy_setting_type(policy).lower()
+        ]
+        return security_policies[:max_results]
+
+
+def fetch_sso_settings(max_results: int = MAX_COMMAND_RESULTS) -> dict[str, list[dict[str, Any]]]:
+    cloud_identity = workspace_cloud_identity_service()
+    saml_response = (
+        cloud_identity.inboundSamlSsoProfiles()
+        .list(pageSize=max_results)
+        .execute()
+    )
+    oidc_response = (
+        cloud_identity.inboundOidcSsoProfiles()
+        .list(pageSize=max_results)
+        .execute()
+    )
+    assignment_response = (
+        cloud_identity.inboundSsoAssignments()
+        .list(pageSize=max_results)
+        .execute()
+    )
+    return {
+        "saml": saml_response.get("inboundSamlSsoProfiles", []),
+        "oidc": oidc_response.get("inboundOidcSsoProfiles", []),
+        "assignments": assignment_response.get("inboundSsoAssignments", []),
+    }
+
+
+def fetch_chrome_versions(max_results: int = MAX_COMMAND_RESULTS) -> list[dict[str, Any]]:
+    chrome = workspace_chrome_management_service()
+    response = (
+        chrome.customers()
+        .reports()
+        .countChromeVersions(
+            customer="customers/my_customer",
+            pageSize=max_results,
+        )
+        .execute()
+    )
+    versions = response.get("browserVersions", [])
+    return versions if isinstance(versions, list) else []
+
+
+def fetch_chrome_installed_apps(
+    max_results: int = MAX_COMMAND_RESULTS,
+) -> list[dict[str, Any]]:
+    chrome = workspace_chrome_management_service()
+    response = (
+        chrome.customers()
+        .reports()
+        .countInstalledApps(
+            customer="customers/my_customer",
+            pageSize=max_results,
+            orderBy="total_install_count desc",
+        )
+        .execute()
+    )
+    apps = response.get("installedApps", [])
+    return apps if isinstance(apps, list) else []
+
+
+def fetch_chrome_profiles(max_results: int = MAX_COMMAND_RESULTS) -> list[dict[str, Any]]:
+    chrome = workspace_chrome_management_service()
+    response = (
+        chrome.customers()
+        .profiles()
+        .list(
+            parent="customers/my_customer",
+            pageSize=max_results,
+        )
+        .execute()
+    )
+    profiles = response.get("chromeBrowserProfiles") or response.get("profiles") or []
+    return profiles if isinstance(profiles, list) else []
+
+
+def fetch_chrome_telemetry_devices(
+    max_results: int = MAX_COMMAND_RESULTS,
+) -> list[dict[str, Any]]:
+    chrome = workspace_chrome_management_service()
+    response = (
+        chrome.customers()
+        .telemetry()
+        .devices()
+        .list(
+            parent="customers/my_customer",
+            pageSize=max_results,
+        )
+        .execute()
+    )
+    devices = response.get("devices") or response.get("telemetryDevices") or []
+    return devices if isinstance(devices, list) else []
+
+
+def fetch_chrome_policy_schemas(
+    max_results: int = MAX_COMMAND_RESULTS,
+) -> list[dict[str, Any]]:
+    chrome_policy = workspace_chrome_policy_service()
+    response = (
+        chrome_policy.customers()
+        .policySchemas()
+        .list(
+            parent="customers/my_customer",
+            filter="chrome.users.*",
+            pageSize=max_results,
+        )
+        .execute()
+    )
+    schemas = response.get("policySchemas", [])
+    return schemas if isinstance(schemas, list) else []
 
 
 def yes_no(value: Any) -> str:
@@ -1965,6 +2525,433 @@ def build_role_assignments_reply(query: str) -> str:
     return "\n".join(lines)
 
 
+def truncate_text(value: str, max_chars: int = 180) -> str:
+    if len(value) <= max_chars:
+        return value
+    return value[: max_chars - 3].rstrip() + "..."
+
+
+def compact_json(value: Any, max_chars: int = 220) -> str:
+    try:
+        rendered = json.dumps(value, sort_keys=True, separators=(",", ":"))
+    except TypeError:
+        rendered = str(value)
+    return truncate_text(rendered, max_chars=max_chars)
+
+
+def first_dict_list(data: dict[str, Any], *keys: str) -> list[dict[str, Any]]:
+    for key in keys:
+        value = data.get(key)
+        if isinstance(value, list):
+            return [item for item in value if isinstance(item, dict)]
+    return []
+
+
+def policy_setting_type(policy: dict[str, Any]) -> str:
+    setting = policy.get("setting")
+    if isinstance(setting, dict):
+        setting_type = setting.get("type") or setting.get("settingType")
+        if isinstance(setting_type, str):
+            return setting_type
+    setting_type = policy.get("settingType")
+    return str(setting_type) if setting_type else "unknown setting"
+
+
+def policy_value_summary(policy: dict[str, Any]) -> str:
+    setting = policy.get("setting")
+    if isinstance(setting, dict):
+        for key in ("value", "effectiveValue"):
+            value = setting.get(key)
+            if value not in {None, ""}:
+                return compact_json(value)
+        setting_copy = {
+            key: value
+            for key, value in setting.items()
+            if key not in {"type", "settingType"}
+        }
+        if setting_copy:
+            return compact_json(setting_copy)
+
+    for key in ("policyQuery", "target", "value"):
+        value = policy.get(key)
+        if value not in {None, ""}:
+            return compact_json(value)
+
+    return "No value returned"
+
+
+def build_calendar_resources_reply() -> str:
+    resources = fetch_calendar_resources()
+
+    if not resources:
+        return "I did not find any calendar resources or room resources."
+
+    lines = [f"Calendar resources / rooms (showing up to {MAX_COMMAND_RESULTS}):"]
+    for resource in resources:
+        name = resource.get("resourceName") or resource.get("generatedResourceName")
+        email = resource.get("resourceEmail") or resource.get("email")
+        capacity = resource.get("capacity")
+        building = resource.get("buildingId") or resource.get("floorName")
+        details = []
+        if capacity is not None:
+            details.append(f"capacity {capacity}")
+        if building:
+            details.append(str(building))
+        detail_text = f" - {', '.join(details)}" if details else ""
+        lines.append(f"- {name or 'Unnamed resource'} ({email or 'no email'}){detail_text}")
+
+    return "\n".join(lines)
+
+
+def build_user_schemas_reply() -> str:
+    schemas = fetch_user_schemas()
+
+    if not schemas:
+        return "I did not find any custom Google Workspace user schemas."
+
+    lines = [f"Custom user schemas (showing up to {MAX_COMMAND_RESULTS}):"]
+    for schema in schemas:
+        name = schema.get("schemaName") or schema.get("displayName") or "Unknown schema"
+        fields = schema.get("fields")
+        field_count = len(fields) if isinstance(fields, list) else 0
+        sample_fields = []
+        if isinstance(fields, list):
+            for field in fields[:4]:
+                if isinstance(field, dict):
+                    sample_fields.append(str(field.get("fieldName") or "unnamed"))
+        suffix = f" - fields: {', '.join(sample_fields)}" if sample_fields else ""
+        lines.append(f"- {name} ({field_count} fields){suffix}")
+
+    return "\n".join(lines)
+
+
+def build_printers_reply() -> str:
+    printers = fetch_chrome_printers()
+
+    if not printers:
+        return "I did not find any Chrome printer configurations."
+
+    lines = [f"Chrome printer configs (showing up to {MAX_COMMAND_RESULTS}):"]
+    for printer in printers:
+        name = printer.get("displayName") or printer.get("name") or "Unnamed printer"
+        uri = printer.get("uri") or printer.get("makeAndModel") or "no URI/model"
+        org_unit = printer.get("orgUnitId") or printer.get("org_unit_id") or "all/unknown OU"
+        lines.append(f"- {name} - {uri}, OU {org_unit}")
+
+    return "\n".join(lines)
+
+
+def build_data_transfer_apps_reply() -> str:
+    applications = fetch_data_transfer_applications()
+
+    if not applications:
+        return "I did not find any data-transfer applications."
+
+    lines = [f"Data-transfer applications (showing up to {MAX_COMMAND_RESULTS}):"]
+    for app_item in applications:
+        name = app_item.get("name") or app_item.get("applicationName") or "Unknown app"
+        app_id = app_item.get("id") or app_item.get("applicationId") or "unknown ID"
+        params = app_item.get("transferParams")
+        param_count = len(params) if isinstance(params, list) else 0
+        lines.append(f"- {name} (`{app_id}`) - {param_count} transfer params")
+
+    return "\n".join(lines)
+
+
+def build_data_transfers_reply() -> str:
+    transfers = fetch_data_transfers()
+
+    if not transfers:
+        return "I did not find any Google Workspace data-transfer requests."
+
+    lines = [f"Data-transfer requests (showing up to {MAX_COMMAND_RESULTS}):"]
+    for transfer in transfers:
+        transfer_id = transfer.get("id") or transfer.get("etag") or "unknown ID"
+        old_owner = transfer.get("oldOwnerUserId") or "unknown source"
+        new_owner = transfer.get("newOwnerUserId") or "unknown destination"
+        status_text = transfer.get("overallTransferStatusCode") or "unknown status"
+        lines.append(f"- `{transfer_id}` - {old_owner} -> {new_owner}, {status_text}")
+
+    return "\n".join(lines)
+
+
+def build_recent_login_activity_reply() -> str:
+    activities = fetch_recent_login_activities()
+
+    if not activities:
+        return "I did not find recent login audit events."
+
+    lines = [f"Recent login audit events (showing up to {MAX_COMMAND_RESULTS}):"]
+    for activity in activities:
+        actor = activity.get("actor") if isinstance(activity.get("actor"), dict) else {}
+        actor_email = actor.get("email") or "unknown actor"
+        event_time = activity.get("id", {}).get("time") if isinstance(activity.get("id"), dict) else None
+        events = activity.get("events")
+        event_names = []
+        if isinstance(events, list):
+            for event in events[:3]:
+                if isinstance(event, dict):
+                    event_names.append(str(event.get("name") or "event"))
+        event_label = ", ".join(event_names) if event_names else "event"
+        lines.append(f"- {event_time or 'unknown time'} - {actor_email}: {event_label}")
+
+    return "\n".join(lines)
+
+
+def build_customer_usage_report_reply() -> str:
+    report_date = reports_date()
+    report = fetch_customer_usage_report(report_date)
+    reports = first_dict_list(report, "usageReports")
+    parameters: list[dict[str, Any]] = []
+    if reports:
+        value = reports[0].get("parameters")
+        if isinstance(value, list):
+            parameters = [item for item in value if isinstance(item, dict)]
+
+    if not parameters:
+        return (
+            f"I reached the customer usage report path for `{report_date}`, "
+            "but Google did not return usage parameters. Reports can lag by a few days."
+        )
+
+    interesting_names = (
+        "accounts:num_users",
+        "accounts:num_users_suspended",
+        "accounts:num_users_2sv_enrolled",
+        "accounts:num_users_2sv_enforced",
+        "accounts:num_users_2sv_not_enrolled_but_enforced",
+        "gmail:num_emails_sent",
+        "drive:num_docs",
+    )
+    by_name = {
+        str(parameter.get("name")): parameter
+        for parameter in parameters
+        if parameter.get("name")
+    }
+
+    lines = [f"Customer usage report for `{report_date}`:"]
+    for name in interesting_names:
+        parameter = by_name.get(name)
+        if not parameter:
+            continue
+        value = (
+            parameter.get("intValue")
+            or parameter.get("boolValue")
+            or parameter.get("stringValue")
+            or parameter.get("datetimeValue")
+            or "0"
+        )
+        lines.append(f"- {name}: {value}")
+
+    if len(lines) == 1:
+        lines.append(f"- Parameters returned: {len(parameters)}")
+        for parameter in parameters[:MAX_COMMAND_RESULTS]:
+            lines.append(f"- {parameter.get('name')}: {compact_json(parameter)}")
+
+    return "\n".join(lines)
+
+
+def build_security_policies_reply() -> str:
+    policies = fetch_security_policies(max_results=25)
+
+    if not policies:
+        return (
+            "I reached Cloud Identity policy access, but Google did not return "
+            "security policies for this tenant. That can mean no explicit policy "
+            "values are configured, or this edition/API surface has no returned "
+            "security settings."
+        )
+
+    two_step_policies = [
+        policy
+        for policy in policies
+        if "two_step_verification" in json.dumps(policy).lower()
+    ]
+    display_policies = two_step_policies or policies[:MAX_COMMAND_RESULTS]
+    title = (
+        "Org-wide / policy-level 2-Step Verification settings"
+        if two_step_policies
+        else "Cloud Identity security policies"
+    )
+    lines = [f"{title} (showing up to {len(display_policies)}):"]
+    for policy in display_policies:
+        setting_type = policy_setting_type(policy).replace("settings/", "")
+        target = policy.get("policyQuery") or policy.get("target") or policy.get("name")
+        lines.append(f"- {setting_type}: {policy_value_summary(policy)}")
+        if target:
+            lines.append(f"  target/source: {compact_json(target, max_chars=160)}")
+
+    if not two_step_policies:
+        lines.append(
+            "I did not see explicit 2SV policy rows in the returned security policy set."
+        )
+
+    return "\n".join(lines)
+
+
+def build_sso_settings_reply() -> str:
+    settings = fetch_sso_settings()
+    saml_profiles = settings.get("saml") or []
+    oidc_profiles = settings.get("oidc") or []
+    assignments = settings.get("assignments") or []
+
+    lines = [
+        "Inbound SSO settings:",
+        f"- SAML profiles: {len(saml_profiles)}",
+        f"- OIDC profiles: {len(oidc_profiles)}",
+        f"- SSO assignments: {len(assignments)}",
+    ]
+
+    for label, items in (
+        ("SAML", saml_profiles),
+        ("OIDC", oidc_profiles),
+        ("Assignment", assignments),
+    ):
+        for item in items[:3]:
+            if not isinstance(item, dict):
+                continue
+            display_name = (
+                item.get("displayName")
+                or item.get("name")
+                or item.get("ssoProfile")
+                or "unnamed"
+            )
+            lines.append(f"- {label}: {display_name}")
+
+    return "\n".join(lines)
+
+
+def build_chrome_versions_reply() -> str:
+    versions = fetch_chrome_versions()
+
+    if not versions:
+        return "I did not find Chrome version report rows."
+
+    lines = [f"Managed Chrome versions (showing up to {MAX_COMMAND_RESULTS}):"]
+    for version in versions:
+        version_number = version.get("version") or "unknown version"
+        count = version.get("count") or "0"
+        channel = version.get("channel") or "unknown channel"
+        system = version.get("system") or "unknown system"
+        lines.append(f"- {version_number} - {count} installs, {channel}, {system}")
+
+    return "\n".join(lines)
+
+
+def build_chrome_apps_reply() -> str:
+    apps = fetch_chrome_installed_apps()
+
+    if not apps:
+        return "I did not find Chrome installed-app report rows."
+
+    lines = [f"Managed Chrome apps/extensions (showing up to {MAX_COMMAND_RESULTS}):"]
+    for app_item in apps:
+        name = app_item.get("appName") or app_item.get("displayName") or "Unknown app"
+        app_type = app_item.get("appType") or "unknown type"
+        installs = app_item.get("totalInstallCount") or app_item.get("browserDeviceCount") or "0"
+        risk = app_item.get("riskAssessment") or app_item.get("riskScore") or "unknown risk"
+        lines.append(f"- {name} - {app_type}, installs {installs}, risk {risk}")
+
+    return "\n".join(lines)
+
+
+def build_chrome_profiles_reply() -> str:
+    profiles = fetch_chrome_profiles()
+
+    if not profiles:
+        return "I did not find managed Chrome browser profiles."
+
+    lines = [f"Managed Chrome profiles (showing up to {MAX_COMMAND_RESULTS}):"]
+    for profile in profiles:
+        email = profile.get("userEmail") or profile.get("displayName") or "unknown user"
+        browser = profile.get("browserVersion") or "unknown browser"
+        os_name = profile.get("osPlatformType") or profile.get("osVersion") or "unknown OS"
+        last_activity = profile.get("lastActivityTime") or "unknown last activity"
+        lines.append(f"- {email} - Chrome {browser}, {os_name}, last active {last_activity}")
+
+    return "\n".join(lines)
+
+
+def build_chrome_telemetry_reply() -> str:
+    devices = fetch_chrome_telemetry_devices()
+
+    if not devices:
+        return "I did not find ChromeOS telemetry device rows."
+
+    lines = [f"ChromeOS telemetry devices (showing up to {MAX_COMMAND_RESULTS}):"]
+    for device in devices:
+        name = device.get("name") or device.get("serialNumber") or "unknown device"
+        org_unit = device.get("orgUnitId") or device.get("orgUnitPath") or "unknown OU"
+        last_report = device.get("reportTime") or device.get("lastReportTime") or "unknown report time"
+        lines.append(f"- {name} - {org_unit}, last report {last_report}")
+
+    return "\n".join(lines)
+
+
+def build_chrome_policy_schemas_reply() -> str:
+    schemas = fetch_chrome_policy_schemas()
+
+    if not schemas:
+        return "I did not find Chrome user policy schemas."
+
+    lines = [f"Chrome policy schemas (showing up to {MAX_COMMAND_RESULTS}):"]
+    for schema in schemas:
+        name = schema.get("name") or schema.get("policySchema") or "unknown schema"
+        access = schema.get("accessRestrictions") or []
+        notices = ", ".join(str(item) for item in access[:2]) if isinstance(access, list) else ""
+        suffix = f" - {notices}" if notices else ""
+        lines.append(f"- {name}{suffix}")
+
+    return "\n".join(lines)
+
+
+def run_scope_check_step(label: str, builder: Any) -> str:
+    try:
+        result = builder()
+        if isinstance(result, list):
+            return f"- OK {label}: {len(result)} row(s) returned"
+        if isinstance(result, dict):
+            return f"- OK {label}: response received"
+        return f"- OK {label}: {result}"
+    except HttpError as exc:
+        status_code = getattr(exc.resp, "status", "unknown")
+        return f"- FAIL {label}: Google API status {status_code}"
+    except Exception as exc:
+        logger.exception("Scope check failed for %s", label)
+        return f"- FAIL {label}: {type(exc).__name__}"
+
+
+def build_admin_scope_check_reply() -> str:
+    checks: list[tuple[str, Any]] = [
+        ("Directory users", lambda: fetch_workspace_users_by_mode("all", 1)),
+        ("Directory groups", lambda: fetch_workspace_groups(1)),
+        ("Directory org units", lambda: fetch_workspace_org_units(1)),
+        ("Directory domains", lambda: fetch_workspace_domains(1)),
+        ("Directory roles", lambda: fetch_workspace_roles(1)),
+        ("Calendar resources", lambda: fetch_calendar_resources(1)),
+        ("User schemas", lambda: fetch_user_schemas(1)),
+        ("Chrome printers", lambda: fetch_chrome_printers(1)),
+        ("Data Transfer apps", lambda: fetch_data_transfer_applications(1)),
+        ("Data Transfer requests", lambda: fetch_data_transfers(1)),
+        ("Reports login audit", lambda: fetch_recent_login_activities(1)),
+        ("Reports customer usage", lambda: fetch_customer_usage_report()),
+        ("Cloud Identity security policies", lambda: fetch_security_policies(1)),
+        ("Cloud Identity SSO settings", lambda: fetch_sso_settings(1)),
+        ("Chrome version reports", lambda: fetch_chrome_versions(1)),
+        ("Chrome installed apps", lambda: fetch_chrome_installed_apps(1)),
+        ("Chrome profiles", lambda: fetch_chrome_profiles(1)),
+        ("Chrome telemetry", lambda: fetch_chrome_telemetry_devices(1)),
+        ("Chrome policy schemas", lambda: fetch_chrome_policy_schemas(1)),
+    ]
+
+    lines = [
+        "Read-only Google Workspace capability check:",
+        "This only performs list/get/report calls. No write actions are attempted.",
+    ]
+    lines.extend(run_scope_check_step(label, builder) for label, builder in checks)
+    return "\n".join(lines)
+
+
 def google_http_error_reply(command_name: str, exc: HttpError) -> str:
     status_code = getattr(exc.resp, "status", None)
     if status_code == 403:
@@ -2280,6 +3267,96 @@ async def handle_workspace_intent(
             f"Looking up admin role assignments for `{intent.query}`...",
             build_role_assignments_reply,
             (intent.query,),
+        ),
+        "admin_scope_check": (
+            "admin scope check",
+            "Checking read-only Google Workspace API capabilities...",
+            build_admin_scope_check_reply,
+            (),
+        ),
+        "list_calendar_resources": (
+            "calendar resources",
+            "Listing Google Workspace calendar resources...",
+            build_calendar_resources_reply,
+            (),
+        ),
+        "list_user_schemas": (
+            "user schemas",
+            "Listing Google Workspace custom user schemas...",
+            build_user_schemas_reply,
+            (),
+        ),
+        "list_printers": (
+            "printers",
+            "Listing Chrome printer configs...",
+            build_printers_reply,
+            (),
+        ),
+        "list_data_transfers": (
+            "data transfers",
+            "Listing Google Workspace data-transfer requests...",
+            build_data_transfers_reply,
+            (),
+        ),
+        "list_transfer_apps": (
+            "data transfer apps",
+            "Listing Google Workspace data-transfer applications...",
+            build_data_transfer_apps_reply,
+            (),
+        ),
+        "recent_login_activity": (
+            "recent login activity",
+            "Checking recent Google Workspace login audit events...",
+            build_recent_login_activity_reply,
+            (),
+        ),
+        "customer_usage_report": (
+            "customer usage report",
+            "Checking Google Workspace customer usage reports...",
+            build_customer_usage_report_reply,
+            (),
+        ),
+        "list_security_policies": (
+            "security policies",
+            "Checking Cloud Identity security policy settings...",
+            build_security_policies_reply,
+            (),
+        ),
+        "list_sso_settings": (
+            "sso settings",
+            "Checking Cloud Identity inbound SSO settings...",
+            build_sso_settings_reply,
+            (),
+        ),
+        "chrome_versions": (
+            "chrome versions",
+            "Checking Chrome version reports...",
+            build_chrome_versions_reply,
+            (),
+        ),
+        "chrome_apps": (
+            "chrome apps",
+            "Checking managed Chrome apps and extensions...",
+            build_chrome_apps_reply,
+            (),
+        ),
+        "chrome_profiles": (
+            "chrome profiles",
+            "Checking managed Chrome browser profiles...",
+            build_chrome_profiles_reply,
+            (),
+        ),
+        "chrome_telemetry": (
+            "chrome telemetry",
+            "Checking ChromeOS telemetry devices...",
+            build_chrome_telemetry_reply,
+            (),
+        ),
+        "chrome_policy_schemas": (
+            "chrome policies",
+            "Checking Chrome policy schemas...",
+            build_chrome_policy_schemas_reply,
+            (),
         ),
     }
 

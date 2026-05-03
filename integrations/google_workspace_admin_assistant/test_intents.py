@@ -66,6 +66,26 @@ class WorkspaceIntentTests(unittest.TestCase):
             "Adam Schembri",
         )
 
+    def test_expanded_readonly_tool_intents(self) -> None:
+        self.assert_intent("admin scope check", "admin_scope_check")
+        self.assert_intent("show meeting rooms", "list_calendar_resources")
+        self.assert_intent("custom user fields", "list_user_schemas")
+        self.assert_intent("show chrome printers", "list_printers")
+        self.assert_intent("list data transfers", "list_data_transfers")
+        self.assert_intent("data transfer apps", "list_transfer_apps")
+        self.assert_intent("recent login audit", "recent_login_activity")
+        self.assert_intent("workspace usage report", "customer_usage_report")
+        self.assert_intent(
+            "what are our current org wide 2mfa settings?",
+            "list_security_policies",
+        )
+        self.assert_intent("show sso settings", "list_sso_settings")
+        self.assert_intent("chrome versions", "chrome_versions")
+        self.assert_intent("chrome extensions", "chrome_apps")
+        self.assert_intent("managed chrome profiles", "chrome_profiles")
+        self.assert_intent("chrome telemetry", "chrome_telemetry")
+        self.assert_intent("chrome policies", "chrome_policy_schemas")
+
     def test_slack_user_allowlist_defaults_open(self) -> None:
         old_value = os.environ.pop("SLACK_ALLOWED_USER_IDS", None)
         try:
@@ -168,12 +188,11 @@ class WorkspaceIntentTests(unittest.TestCase):
         self.assertTrue(main.is_short_context_followup("subscription status"))
         self.assertFalse(main.is_short_context_followup("what groups is Adam in?"))
 
-    def test_org_mfa_policy_question_gets_deterministic_boundary_reply(self) -> None:
-        reply = main.build_common_reply("what are our current org wide 2mfa settings?")
-        self.assertIsNotNone(reply)
-        assert reply is not None
-        self.assertIn("do not have an org-wide 2-Step Verification", reply)
-        self.assertIn("should not pretend", reply)
+    def test_org_mfa_policy_question_routes_to_policy_tool(self) -> None:
+        self.assert_intent(
+            "what are our current org wide 2mfa settings?",
+            "list_security_policies",
+        )
 
     def test_google_workspace_scope_pack_is_read_only_only(self) -> None:
         self.assertEqual(
