@@ -2511,6 +2511,48 @@ def value_present(value: Any) -> bool:
     return value is not None and value != ""
 
 
+def humanize_identifier(value: str) -> str:
+    spaced = re.sub(r"(?<!^)(?=[A-Z])", " ", value)
+    spaced = spaced.replace("_", " ").replace("-", " ").strip()
+    return " ".join(word.capitalize() for word in spaced.split())
+
+
+def humanize_enum(value: str) -> str:
+    enum_labels = {
+        "ALL": "All methods",
+        "DOMAIN_WIDE_SAML_IF_ENABLED": "Domain-wide SAML if enabled",
+        "NEVER": "Never",
+        "OIDC_SSO": "OIDC SSO",
+        "SAML_SSO": "SAML SSO",
+        "SSO_OFF": "SSO off",
+    }
+    if value in enum_labels:
+        return enum_labels[value]
+    if re.fullmatch(r"[A-Z0-9_]+", value):
+        return humanize_identifier(value)
+    return value
+
+
+def format_duration_seconds(value: str) -> str:
+    match = re.fullmatch(r"(\d+)s", value)
+    if not match:
+        return value
+
+    seconds = int(match.group(1))
+    if seconds == 0:
+        return "0 seconds"
+    if seconds % 86400 == 0:
+        days = seconds // 86400
+        return f"{days} day" if days == 1 else f"{days} days"
+    if seconds % 3600 == 0:
+        hours = seconds // 3600
+        return f"{hours} hour" if hours == 1 else f"{hours} hours"
+    if seconds % 60 == 0:
+        minutes = seconds // 60
+        return f"{minutes} minute" if minutes == 1 else f"{minutes} minutes"
+    return f"{seconds} seconds"
+
+
 def first_dict_list(data: dict[str, Any], *keys: str) -> list[dict[str, Any]]:
     for key in keys:
         value = data.get(key)
@@ -2527,6 +2569,42 @@ def policy_setting_type(policy: dict[str, Any]) -> str:
             return setting_type
     setting_type = policy.get("settingType")
     return str(setting_type) if setting_type else "unknown setting"
+
+
+POLICY_SETTING_LABELS = {
+    "security.two_step_verification_device_trust": "Trusted devices allowed",
+    "security.two_step_verification_enforcement": "Enforcement starts",
+    "security.two_step_verification_enforcement_factor": "Allowed methods",
+    "security.two_step_verification_enrollment": "Enrollment allowed",
+    "security.two_step_verification_grace_period": "Enrollment grace period",
+    "security.two_step_verification_sign_in_codes": "Backup-code exception period",
+}
+
+
+def friendly_policy_setting_label(setting_type: str) -> str:
+    short_type = setting_type.replace("settings/", "")
+    if short_type in POLICY_SETTING_LABELS:
+        return POLICY_SETTING_LABELS[short_type]
+    return humanize_identifier(short_type.replace(".", " "))
+
+
+def friendly_value(value: Any) -> str:
+    if isinstance(value, bool):
+        return "Yes" if value else "No"
+    if isinstance(value, str):
+        if re.fullmatch(r"\d+s", value):
+            return format_duration_seconds(value)
+        if value.endswith("Z") and re.match(r"^\d{4}-\d{2}-\d{2}T", value):
+            return value
+        return humanize_enum(value)
+    if isinstance(value, list):
+        return ", ".join(friendly_value(item) for item in value) if value else "None"
+    if isinstance(value, dict):
+        return ", ".join(
+            f"{humanize_identifier(str(key))}: {friendly_value(item)}"
+            for key, item in value.items()
+        )
+    return str(value)
 
 
 def policy_value_summary(policy: dict[str, Any]) -> str:
@@ -2550,6 +2628,87 @@ def policy_value_summary(policy: dict[str, Any]) -> str:
             return compact_json(value)
 
     return "No value returned"
+
+
+def friendly_policy_value_summary(policy: dict[str, Any]) -> str:
+    setting = policy.get("setting")
+    if isinstance(setting, dict):
+        for key in ("value", "effectiveValue"):
+            value = setting.get(key)
+            if value_present(value):
+                if isinstance(value, dict) and len(value) == 1:
+                    return friendly_value(next(iter(value.values())))
+                return friendly_value(value)
+
+    return policy_value_summary(policy)
+
+
+def org_unit_resource_aliases(org_unit_id: Any) -> list[str]:
+    if not org_unit_id:
+        return []
+    value = str(org_unit_id)
+    aliases = [value]
+    if value.startswith("id:"):
+        value = value[3:]
+        aliases.append(value)
+    aliases.append(f"orgUnits/{value}")
+    return aliases
+
+
+def fetch_org_unit_labels(max_results: int = 200) -> dict[str, str]:
+    labels: dict[str, str] = {}
+    for org_unit in fetch_workspace_org_units(max_results):
+        path = org_unit.get("orgUnitPath") or org_unit.get("name")
+        if path == "/":
+            label = "Root OU `/`"
+        elif path:
+            label = f"OU `{path}`"
+        else:
+            label = f"OU `{org_unit.get('name') or 'unknown'}`"
+
+        for key in ("orgUnitId", "name"):
+            for alias in org_unit_resource_aliases(org_unit.get(key)):
+                labels[alias] = label
+
+    return labels
+
+
+def fetch_org_unit_labels_safely() -> dict[str, str]:
+    try:
+        return fetch_org_unit_labels()
+    except Exception:
+        logger.exception("Could not build org-unit labels for formatted reply.")
+        return {}
+
+
+def target_label(
+    target: Any,
+    org_unit_labels: dict[str, str],
+    default: str = "Tenant default",
+) -> str:
+    if not isinstance(target, str) or not target:
+        return default
+    if target.startswith("orgUnits/"):
+        return org_unit_labels.get(target) or f"OU `{target}`"
+    if target.startswith("groups/"):
+        return f"Group `{target}`"
+    return f"`{target}`"
+
+
+def policy_target_label(
+    policy: dict[str, Any],
+    org_unit_labels: dict[str, str],
+) -> str:
+    policy_query = policy.get("policyQuery")
+    if isinstance(policy_query, dict):
+        org_unit = policy_query.get("orgUnit")
+        if isinstance(org_unit, str) and org_unit:
+            return target_label(org_unit, org_unit_labels)
+        group = policy_query.get("group")
+        if isinstance(group, str) and group:
+            return target_label(group, org_unit_labels)
+    target = policy.get("target")
+    return target_label(target, org_unit_labels)
 
 
 def build_calendar_resources_reply() -> str:
@@ -2739,26 +2898,77 @@ def build_security_policies_reply() -> str:
         for policy in policies
         if "two_step_verification" in json.dumps(policy).lower()
     ]
-    display_policies = two_step_policies or policies[:MAX_COMMAND_RESULTS]
-    title = (
-        "Org-wide / policy-level 2-Step Verification settings"
-        if two_step_policies
-        else "Cloud Identity security policies"
-    )
-    lines = [f"{title} (showing up to {len(display_policies)}):"]
-    for policy in display_policies:
-        setting_type = policy_setting_type(policy).replace("settings/", "")
-        target = policy.get("policyQuery") or policy.get("target") or policy.get("name")
-        lines.append(f"- {setting_type}: {policy_value_summary(policy)}")
-        if target:
-            lines.append(f"  target/source: {compact_json(target, max_chars=160)}")
 
-    if not two_step_policies:
+    org_unit_labels = fetch_org_unit_labels_safely()
+    if two_step_policies:
+        grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
+        for policy in two_step_policies:
+            grouped[policy_target_label(policy, org_unit_labels)].append(policy)
+
+        lines = [
+            "Org-wide / policy-level 2-Step Verification settings "
+            f"({len(two_step_policies)} policy rows across {len(grouped)} target(s)):"
+        ]
+        for target, target_policies in grouped.items():
+            lines.append(f"{target}:")
+            for policy in target_policies:
+                setting_type = policy_setting_type(policy)
+                lines.append(
+                    f"- {friendly_policy_setting_label(setting_type)}: "
+                    f"{friendly_policy_value_summary(policy)}"
+                )
+        return "\n".join(lines)
+
+    display_policies = policies[:MAX_COMMAND_RESULTS]
+    lines = [f"Cloud Identity security policies (showing up to {len(display_policies)}):"]
+    for policy in display_policies:
+        setting_type = policy_setting_type(policy)
+        target = policy_target_label(policy, org_unit_labels)
         lines.append(
-            "I did not see explicit 2SV policy rows in the returned security policy set."
+            f"- {friendly_policy_setting_label(setting_type)}: "
+            f"{friendly_policy_value_summary(policy)} ({target})"
         )
 
+    lines.append(
+        "I did not see explicit 2SV policy rows in the returned security policy set."
+    )
+
     return "\n".join(lines)
+
+
+def sso_mode_label(value: Any) -> str:
+    return humanize_enum(str(value or "SSO_MODE_UNSPECIFIED"))
+
+
+def sso_assignment_profile_label(
+    assignment: dict[str, Any],
+    profile_names: dict[str, str],
+) -> str | None:
+    saml_info = assignment.get("samlSsoInfo")
+    if isinstance(saml_info, dict):
+        profile = saml_info.get("inboundSamlSsoProfile")
+        if isinstance(profile, str) and profile:
+            return profile_names.get(profile) or profile
+
+    oidc_info = assignment.get("oidcSsoInfo")
+    if isinstance(oidc_info, dict):
+        profile = oidc_info.get("inboundOidcSsoProfile")
+        if isinstance(profile, str) and profile:
+            return profile_names.get(profile) or profile
+
+    return None
+
+
+def sso_redirect_label(assignment: dict[str, Any]) -> str | None:
+    sign_in = assignment.get("signInBehavior")
+    if not isinstance(sign_in, dict):
+        return None
+    redirect = sign_in.get("redirectCondition")
+    if not redirect:
+        return None
+    if redirect == "REDIRECT_CONDITION_UNSPECIFIED":
+        return "Default"
+    return humanize_enum(str(redirect))
 
 
 def build_sso_settings_reply() -> str:
@@ -2766,6 +2976,16 @@ def build_sso_settings_reply() -> str:
     saml_profiles = settings.get("saml") or []
     oidc_profiles = settings.get("oidc") or []
     assignments = settings.get("assignments") or []
+    org_unit_labels = fetch_org_unit_labels_safely()
+
+    profile_names: dict[str, str] = {}
+    for profile in saml_profiles + oidc_profiles:
+        if not isinstance(profile, dict):
+            continue
+        name = profile.get("name")
+        display_name = profile.get("displayName") or name
+        if isinstance(name, str) and isinstance(display_name, str):
+            profile_names[name] = display_name
 
     lines = [
         "Inbound SSO settings:",
@@ -2774,21 +2994,29 @@ def build_sso_settings_reply() -> str:
         f"- SSO assignments: {len(assignments)}",
     ]
 
-    for label, items in (
-        ("SAML", saml_profiles),
-        ("OIDC", oidc_profiles),
-        ("Assignment", assignments),
-    ):
-        for item in items[:3]:
-            if not isinstance(item, dict):
+    for label, profiles in (("SAML profile", saml_profiles), ("OIDC profile", oidc_profiles)):
+        for profile in profiles[:3]:
+            if not isinstance(profile, dict):
                 continue
-            display_name = (
-                item.get("displayName")
-                or item.get("name")
-                or item.get("ssoProfile")
-                or "unnamed"
-            )
+            display_name = profile.get("displayName") or profile.get("name") or "unnamed"
             lines.append(f"- {label}: {display_name}")
+
+    for assignment in assignments[:MAX_COMMAND_RESULTS]:
+        if not isinstance(assignment, dict):
+            continue
+        target = assignment.get("targetOrgUnit") or assignment.get("targetGroup")
+        target_text = target_label(target, org_unit_labels)
+        details = [sso_mode_label(assignment.get("ssoMode"))]
+        profile = sso_assignment_profile_label(assignment, profile_names)
+        if profile:
+            details.append(f"profile {profile}")
+        redirect = sso_redirect_label(assignment)
+        if redirect:
+            details.append(f"redirect {redirect}")
+        rank = assignment.get("rank")
+        if rank not in {None, 0, "0"}:
+            details.append(f"rank {rank}")
+        lines.append(f"- {target_text}: {', '.join(details)}")
 
     return "\n".join(lines)
 

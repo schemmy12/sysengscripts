@@ -4,6 +4,7 @@ import os
 import sys
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 
 sys.path.insert(0, str(Path(__file__).parent))
@@ -263,6 +264,65 @@ class WorkspaceIntentTests(unittest.TestCase):
         summary = main.policy_value_summary(policy)
         self.assertIn("allowedMethods", summary)
         self.assertIn("enforced", summary)
+
+    def test_security_policy_reply_groups_2sv_by_org_unit(self) -> None:
+        policies = [
+            {
+                "policyQuery": {"orgUnit": "orgUnits/root"},
+                "setting": {
+                    "type": "settings/security.two_step_verification_enrollment",
+                    "value": {"allowEnrollment": True},
+                },
+            },
+            {
+                "policyQuery": {"orgUnit": "orgUnits/root"},
+                "setting": {
+                    "type": "settings/security.two_step_verification_grace_period",
+                    "value": {"enrollmentGracePeriod": "86400s"},
+                },
+            },
+        ]
+
+        with (
+            patch.object(main, "fetch_security_policies", return_value=policies),
+            patch.object(
+                main,
+                "fetch_org_unit_labels_safely",
+                return_value={"orgUnits/root": "Root OU `/`"},
+            ),
+        ):
+            reply = main.build_security_policies_reply()
+
+        self.assertIn("Root OU `/`:", reply)
+        self.assertIn("- Enrollment allowed: Yes", reply)
+        self.assertIn("- Enrollment grace period: 1 day", reply)
+        self.assertNotIn("entity.org_units", reply)
+
+    def test_sso_reply_summarizes_assignments(self) -> None:
+        settings = {
+            "saml": [],
+            "oidc": [],
+            "assignments": [
+                {
+                    "targetOrgUnit": "orgUnits/root",
+                    "ssoMode": "DOMAIN_WIDE_SAML_IF_ENABLED",
+                    "signInBehavior": {"redirectCondition": "NEVER"},
+                }
+            ],
+        }
+
+        with (
+            patch.object(main, "fetch_sso_settings", return_value=settings),
+            patch.object(
+                main,
+                "fetch_org_unit_labels_safely",
+                return_value={"orgUnits/root": "Root OU `/`"},
+            ),
+        ):
+            reply = main.build_sso_settings_reply()
+
+        self.assertIn("Root OU `/`: Domain-wide SAML if enabled, redirect Never", reply)
+        self.assertNotIn("inboundSsoAssignments/", reply)
 
 
 if __name__ == "__main__":
