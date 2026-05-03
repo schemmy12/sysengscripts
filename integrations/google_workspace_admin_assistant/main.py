@@ -76,6 +76,7 @@ logger = logging.getLogger("google_workspace_admin_assistant")
 
 app = FastAPI()
 CONVERSATION_HISTORY: dict[str, list[tuple[str, str]]] = defaultdict(list)
+CONVERSATION_PENDING_ACTIONS: dict[str, "PendingWorkspaceAction"] = {}
 
 
 @dataclass(frozen=True)
@@ -83,6 +84,12 @@ class WorkspaceIntent:
     name: str
     query: str | None = None
     mode: str | None = None
+
+
+@dataclass(frozen=True)
+class PendingWorkspaceAction:
+    name: str
+    group_emails: tuple[str, ...] = ()
 
 
 WORKSPACE_INTENT_NAMES = {
@@ -318,6 +325,67 @@ def recent_conversation_context(history_key: str) -> str:
         label = "User" if role == "user" else "Assistant"
         lines.append(f"{label}: {message}")
     return "\n".join(lines)
+
+
+def clear_pending_action(history_key: str) -> None:
+    CONVERSATION_PENDING_ACTIONS.pop(history_key, None)
+
+
+def remember_pending_action(
+    history_key: str,
+    action: PendingWorkspaceAction,
+) -> None:
+    CONVERSATION_PENDING_ACTIONS[history_key] = action
+
+
+def pending_action_for(history_key: str) -> PendingWorkspaceAction | None:
+    return CONVERSATION_PENDING_ACTIONS.get(history_key)
+
+
+def is_affirmative_followup(text: str) -> bool:
+    normalized = normalize_slack_text(text).lower().strip(" .?!")
+    return normalized in {"yes", "y", "yep", "yeah", "correct", "do it", "go ahead"}
+
+
+def is_negative_followup(text: str) -> bool:
+    normalized = normalize_slack_text(text).lower().strip(" .?!")
+    return normalized in {"no", "n", "nope", "cancel", "never mind", "nevermind"}
+
+
+def extract_requested_group_count(text: str) -> int | None:
+    normalized = normalize_slack_text(text).lower()
+    match = re.search(r"\b(?:those|these|all|the)?\s*(\d{1,2})\s+groups?\b", normalized)
+    if not match:
+        return None
+    try:
+        return int(match.group(1))
+    except ValueError:
+        return None
+
+
+def recent_group_list_emails(history_key: str) -> tuple[str, ...]:
+    history = CONVERSATION_HISTORY.get(history_key, [])
+    for role, message in reversed(history):
+        if role != "assistant":
+            continue
+        if "Google Workspace groups" not in message:
+            continue
+        emails: list[str] = []
+        for match in EMAIL_PATTERN.findall(message):
+            email = match.lower()
+            if email not in emails:
+                emails.append(email)
+        return tuple(emails[:MAX_COMMAND_RESULTS])
+    return ()
+
+
+def is_recent_group_members_request(text: str) -> bool:
+    normalized = normalize_slack_text(text).lower()
+    return bool(
+        re.search(r"\b(?:member|members|user|users|who)\b", normalized)
+        and re.search(r"\bgroup", normalized)
+        and re.search(r"\b(?:those|these|each|all|listed|above)\b", normalized)
+    )
 
 
 def is_short_context_followup(text: str) -> bool:
@@ -2242,6 +2310,38 @@ def build_group_members_reply(query: str) -> str:
     return "\n".join(lines)
 
 
+def format_group_members_lines(group_email: str, members: list[dict[str, Any]]) -> list[str]:
+    if not members:
+        return [f"`{group_email}`: no direct members found."]
+
+    lines = [
+        f"`{group_email}`: {len(members)} direct member(s) "
+        f"shown up to {MAX_COMMAND_RESULTS}:",
+    ]
+    for member in members[:MAX_COMMAND_RESULTS]:
+        if not isinstance(member, dict):
+            continue
+        email = member.get("email") or member.get("id") or "unknown"
+        role = member.get("role") or "MEMBER"
+        member_type = member.get("type") or "unknown type"
+        lines.append(f"- {email} - {role}, {member_type}")
+    return lines
+
+
+def build_group_members_for_groups_reply(group_emails: tuple[str, ...]) -> str:
+    if not group_emails:
+        return "I do not have a recent group list to use for that lookup."
+
+    lines = [f"Direct members for {len(group_emails)} Google Workspace group(s):"]
+    for index, group_email in enumerate(group_emails):
+        members = fetch_workspace_group_members(group_email)
+        if index:
+            lines.append("")
+        lines.extend(format_group_members_lines(group_email, members))
+
+    return "\n".join(lines)
+
+
 def build_org_units_reply() -> str:
     org_units = fetch_workspace_org_units()
 
@@ -3425,6 +3525,7 @@ async def handle_workspace_intent(
     history_key: str,
 ) -> None:
     audit_slack_action(event, intent.name, intent.query)
+    clear_pending_action(history_key)
     user_text = event.get("text", "")
     user_text = user_text if isinstance(user_text, str) else ""
 
@@ -3630,6 +3731,114 @@ async def handle_workspace_intent(
     remember_conversation_turn(history_key, user_text, reply)
 
 
+async def execute_pending_group_members_action(
+    event: dict[str, Any],
+    group_emails: tuple[str, ...],
+    channel: str,
+    thread_ts: str | None,
+    history_key: str,
+) -> None:
+    user_text = event.get("text", "")
+    user_text = user_text if isinstance(user_text, str) else ""
+    audit_slack_action(event, "group_members_recent_groups", ",".join(group_emails))
+
+    placeholder_ts = await post_slack_message(
+        channel,
+        f"Listing direct members for {len(group_emails)} recent group(s)...",
+        thread_ts,
+    )
+    reply = await build_workspace_command_reply_safely(
+        "group members for recent groups",
+        build_group_members_for_groups_reply,
+        group_emails,
+    )
+    await finish_slack_placeholder(channel, placeholder_ts, reply, thread_ts)
+    remember_conversation_turn(history_key, user_text, reply)
+
+
+async def handle_pending_action_reply(
+    event: dict[str, Any],
+    text: str,
+    channel: str,
+    thread_ts: str | None,
+    history_key: str,
+) -> bool:
+    action = pending_action_for(history_key)
+    if not action:
+        return False
+
+    if is_negative_followup(text):
+        clear_pending_action(history_key)
+        reply = "No problem. I cleared that pending lookup."
+        await post_slack_message(channel, reply, thread_ts)
+        remember_conversation_turn(history_key, text, reply)
+        return True
+
+    if not is_affirmative_followup(text):
+        return False
+
+    clear_pending_action(history_key)
+    if action.name == "group_members_for_recent_groups":
+        await execute_pending_group_members_action(
+            event,
+            action.group_emails,
+            channel,
+            thread_ts,
+            history_key,
+        )
+        return True
+
+    reply = "I had a pending lookup, but that action is not wired anymore."
+    await post_slack_message(channel, reply, thread_ts)
+    remember_conversation_turn(history_key, text, reply)
+    return True
+
+
+async def handle_recent_group_members_request(
+    event: dict[str, Any],
+    text: str,
+    channel: str,
+    thread_ts: str | None,
+    history_key: str,
+) -> bool:
+    if not is_recent_group_members_request(text):
+        return False
+
+    group_emails = recent_group_list_emails(history_key)
+    if not group_emails:
+        return False
+
+    requested_count = extract_requested_group_count(text)
+    if requested_count and requested_count != len(group_emails):
+        lines = [
+            f"I found {len(group_emails)} group(s) in the recent list, not "
+            f"{requested_count}.",
+            "Reply `yes` to list members for these groups, or send the exact group emails:",
+        ]
+        lines.extend(f"{index}) {email}" for index, email in enumerate(group_emails, start=1))
+        reply = "\n".join(lines)
+        remember_pending_action(
+            history_key,
+            PendingWorkspaceAction(
+                "group_members_for_recent_groups",
+                group_emails=group_emails,
+            ),
+        )
+        await post_slack_message(channel, reply, thread_ts)
+        remember_conversation_turn(history_key, text, reply)
+        return True
+
+    clear_pending_action(history_key)
+    await execute_pending_group_members_action(
+        event,
+        group_emails,
+        channel,
+        thread_ts,
+        history_key,
+    )
+    return True
+
+
 async def handle_slack_event_reply(event: dict[str, Any]) -> None:
     start = time.perf_counter()
     channel = event.get("channel")
@@ -3649,6 +3858,32 @@ async def handle_slack_event_reply(event: dict[str, Any]) -> None:
         return
 
     if isinstance(text, str):
+        if await handle_pending_action_reply(
+            event,
+            text,
+            channel,
+            thread_ts,
+            history_key,
+        ):
+            logger.info(
+                "Pending-action Slack flow completed in %.0f ms",
+                (time.perf_counter() - start) * 1000,
+            )
+            return
+
+        if await handle_recent_group_members_request(
+            event,
+            text,
+            channel,
+            thread_ts,
+            history_key,
+        ):
+            logger.info(
+                "Recent-group-members Slack flow completed in %.0f ms",
+                (time.perf_counter() - start) * 1000,
+            )
+            return
+
         workspace_intent = detect_workspace_intent(text)
         if workspace_intent:
             await handle_workspace_intent(

@@ -197,6 +197,63 @@ class WorkspaceIntentTests(unittest.TestCase):
         self.assertTrue(main.is_short_context_followup("subscription status"))
         self.assertFalse(main.is_short_context_followup("what groups is Adam in?"))
 
+    def test_recent_group_list_emails_extracts_last_group_reply(self) -> None:
+        key = "test-recent-groups"
+        main.CONVERSATION_HISTORY.pop(key, None)
+        try:
+            main.remember_conversation_turn(
+                key,
+                "list groups",
+                "\n".join(
+                    [
+                        "Google Workspace groups (showing up to 10):",
+                        "- sharedriveadmin@example.com (Shared Drive Admin) - 1 direct members",
+                        "- testgroup@example.com (Test Group) - 11 direct members",
+                    ]
+                ),
+            )
+
+            self.assertEqual(
+                main.recent_group_list_emails(key),
+                ("sharedriveadmin@example.com", "testgroup@example.com"),
+            )
+        finally:
+            main.CONVERSATION_HISTORY.pop(key, None)
+
+    def test_recent_group_members_request_detection(self) -> None:
+        self.assertTrue(
+            main.is_recent_group_members_request(
+                "can you list the users that are in each of those 4 groups"
+            )
+        )
+        self.assertEqual(
+            main.extract_requested_group_count(
+                "can you list the users that are in each of those 4 groups"
+            ),
+            4,
+        )
+        self.assertFalse(main.is_recent_group_members_request("what groups is Adam in?"))
+
+    def test_build_group_members_for_groups_reply(self) -> None:
+        def fake_members(group_email: str) -> list[dict[str, str]]:
+            return [
+                {
+                    "email": f"user@{group_email.split('@')[1]}",
+                    "role": "MEMBER",
+                    "type": "USER",
+                }
+            ]
+
+        with patch.object(main, "fetch_workspace_group_members", side_effect=fake_members):
+            reply = main.build_group_members_for_groups_reply(
+                ("group1@example.com", "group2@example.com")
+            )
+
+        self.assertIn("Direct members for 2 Google Workspace group(s):", reply)
+        self.assertIn("`group1@example.com`", reply)
+        self.assertIn("`group2@example.com`", reply)
+        self.assertIn("user@example.com - MEMBER, USER", reply)
+
     def test_org_mfa_policy_question_routes_to_policy_tool(self) -> None:
         self.assert_intent(
             "what are our current org wide 2mfa settings?",
