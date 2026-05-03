@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import os
 import sys
 import unittest
@@ -253,6 +254,34 @@ class WorkspaceIntentTests(unittest.TestCase):
         self.assertIn("`group1@example.com`", reply)
         self.assertIn("`group2@example.com`", reply)
         self.assertIn("user@example.com - MEMBER, USER", reply)
+
+    def test_workspace_command_retries_transient_transport_error(self) -> None:
+        attempts = 0
+
+        def flaky_builder() -> str:
+            nonlocal attempts
+            attempts += 1
+            if attempts == 1:
+                raise BrokenPipeError(32, "Broken pipe")
+            return "ok"
+
+        reply = asyncio.run(
+            main.build_workspace_command_reply_safely("list users", flaky_builder)
+        )
+
+        self.assertEqual(reply, "ok")
+        self.assertEqual(attempts, 2)
+
+    def test_workspace_command_reports_persistent_transport_error(self) -> None:
+        def broken_builder() -> str:
+            raise BrokenPipeError(32, "Broken pipe")
+
+        reply = asyncio.run(
+            main.build_workspace_command_reply_safely("list users", broken_builder)
+        )
+
+        self.assertIn("connection hiccupped", reply)
+        self.assertNotIn("Workspace setup failed", reply)
 
     def test_org_mfa_policy_question_routes_to_policy_tool(self) -> None:
         self.assert_intent(

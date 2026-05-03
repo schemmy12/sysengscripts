@@ -70,6 +70,7 @@ REQUEST_TOLERANCE_SECONDS = 60 * 5
 SLACK_POST_MESSAGE_URL = "https://slack.com/api/chat.postMessage"
 SLACK_UPDATE_MESSAGE_URL = "https://slack.com/api/chat.update"
 TRUE_VALUES = {"1", "true", "yes", "on"}
+GOOGLE_WORKSPACE_TRANSIENT_RETRIES = 2
 
 logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO").upper())
 logger = logging.getLogger("google_workspace_admin_assistant")
@@ -1469,6 +1470,58 @@ def workspace_chrome_management_service():
 
 def workspace_chrome_policy_service():
     return workspace_google_service("chromepolicy", "v1")
+
+
+def is_transient_google_transport_error(exc: Exception) -> bool:
+    if isinstance(exc, (BrokenPipeError, ConnectionError, TimeoutError)):
+        return True
+
+    if isinstance(exc, OSError):
+        errno = getattr(exc, "errno", None)
+        if errno in {32, 54, 104, 110, 10053, 10054, 10060}:
+            return True
+
+    message = str(exc).lower()
+    return any(
+        marker in message
+        for marker in (
+            "broken pipe",
+            "connection reset",
+            "connection aborted",
+            "timed out",
+            "temporarily unavailable",
+            "ssl",
+        )
+    )
+
+
+async def run_workspace_builder_with_retries(
+    command_name: str,
+    builder: Any,
+    *args: Any,
+) -> Any:
+    attempts = GOOGLE_WORKSPACE_TRANSIENT_RETRIES + 1
+    for attempt in range(1, attempts + 1):
+        try:
+            return await asyncio.to_thread(builder, *args)
+        except HttpError:
+            raise
+        except Exception as exc:
+            if attempt >= attempts or not is_transient_google_transport_error(exc):
+                raise
+
+            logger.warning(
+                "Transient Google Workspace transport failure; retrying "
+                "command=%s attempt=%s/%s",
+                command_name,
+                attempt,
+                attempts,
+                exc_info=True,
+            )
+            workspace_google_service.cache_clear()
+            await asyncio.sleep(0.25 * attempt)
+
+    raise RuntimeError(f"Workspace command did not complete: {command_name}")
 
 
 def fetch_workspace_user_sample(max_results: int = 5) -> list[dict[str, Any]]:
@@ -3327,11 +3380,20 @@ async def build_workspace_command_reply_safely(
 ) -> str:
     start = time.perf_counter()
     try:
-        return await asyncio.to_thread(builder, *args)
+        return await run_workspace_builder_with_retries(command_name, builder, *args)
     except HttpError as exc:
         logger.exception("Google Workspace command failed: %s", command_name)
         return google_http_error_reply(command_name, exc)
-    except Exception:
+    except Exception as exc:
+        if is_transient_google_transport_error(exc):
+            logger.exception(
+                "Google Workspace command transport failed after retries: %s",
+                command_name,
+            )
+            return (
+                f"I tried `{command_name}`, but the Google Workspace API "
+                "connection hiccupped. Please try again in a moment."
+            )
         logger.exception("Google Workspace command setup failed: %s", command_name)
         return (
             f"I tried `{command_name}`, but something in the Workspace setup "
@@ -3349,11 +3411,23 @@ async def build_workspace_command_reply_safely(
 async def build_find_user_reply_safely(query: str) -> str:
     start = time.perf_counter()
     try:
-        return await asyncio.to_thread(build_find_user_reply, query)
+        return await run_workspace_builder_with_retries(
+            "lookup user",
+            build_find_user_reply,
+            query,
+        )
     except HttpError as exc:
         logger.exception("Google Workspace user lookup failed.")
         return google_http_error_reply("lookup user", exc)
-    except Exception:
+    except Exception as exc:
+        if is_transient_google_transport_error(exc):
+            logger.exception(
+                "Google Workspace user lookup transport failed after retries."
+            )
+            return (
+                "I tried the user lookup, but the Google Workspace API "
+                "connection hiccupped. Please try again in a moment."
+            )
         logger.exception("Google Workspace user lookup setup failed.")
         return (
             "I tried the user lookup, but something in the Workspace setup failed. "
@@ -3394,11 +3468,23 @@ def build_admin_test_reply() -> str:
 async def build_admin_test_reply_safely() -> str:
     start = time.perf_counter()
     try:
-        return await asyncio.to_thread(build_admin_test_reply)
+        return await run_workspace_builder_with_retries(
+            "admin test",
+            build_admin_test_reply,
+        )
     except HttpError as exc:
         logger.exception("Google Workspace Admin SDK request failed.")
         return google_http_error_reply("admin test", exc)
-    except Exception:
+    except Exception as exc:
+        if is_transient_google_transport_error(exc):
+            logger.exception(
+                "Google Workspace Admin SDK transport failed after retries."
+            )
+            return (
+                "I tried the Google Workspace Admin SDK smoke test, but the "
+                "Google Workspace API connection hiccupped. Please try again "
+                "in a moment."
+            )
         logger.exception("Google Workspace Admin SDK setup failed.")
         return (
             "I tried the Google Workspace Admin SDK smoke test, but the setup "
