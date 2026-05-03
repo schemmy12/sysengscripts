@@ -22,16 +22,38 @@ from googleapiclient.errors import HttpError
 from openai import AsyncOpenAI, OpenAIError
 
 
+# Keep this list read-only. Domain-wide delegation in Google Admin Console must
+# authorize the same scopes before Cloud Run can use them.
 GOOGLE_WORKSPACE_READONLY_SCOPES = (
-    "https://www.googleapis.com/auth/admin.directory.user.readonly",
+    # Admin SDK Directory API: core tenant metadata.
+    "https://www.googleapis.com/auth/admin.directory.customer.readonly",
+    "https://www.googleapis.com/auth/admin.directory.domain.readonly",
     "https://www.googleapis.com/auth/admin.directory.group.readonly",
     "https://www.googleapis.com/auth/admin.directory.group.member.readonly",
     "https://www.googleapis.com/auth/admin.directory.orgunit.readonly",
+    "https://www.googleapis.com/auth/admin.directory.resource.calendar.readonly",
+    "https://www.googleapis.com/auth/admin.directory.rolemanagement.readonly",
+    "https://www.googleapis.com/auth/admin.directory.user.alias.readonly",
+    "https://www.googleapis.com/auth/admin.directory.user.readonly",
+    "https://www.googleapis.com/auth/admin.directory.userschema.readonly",
+    # Admin SDK Directory API: managed devices and Chrome admin inventory.
+    "https://www.googleapis.com/auth/admin.chrome.printers.readonly",
     "https://www.googleapis.com/auth/admin.directory.device.chromeos.readonly",
     "https://www.googleapis.com/auth/admin.directory.device.mobile.readonly",
-    "https://www.googleapis.com/auth/admin.directory.rolemanagement.readonly",
-    "https://www.googleapis.com/auth/admin.directory.customer.readonly",
-    "https://www.googleapis.com/auth/admin.directory.domain.readonly",
+    # Admin SDK Reports and Data Transfer APIs.
+    "https://www.googleapis.com/auth/admin.datatransfer.readonly",
+    "https://www.googleapis.com/auth/admin.reports.audit.readonly",
+    "https://www.googleapis.com/auth/admin.reports.usage.readonly",
+    # Chrome Management and Chrome Policy APIs.
+    "https://www.googleapis.com/auth/chrome.management.appdetails.readonly",
+    "https://www.googleapis.com/auth/chrome.management.policy.readonly",
+    "https://www.googleapis.com/auth/chrome.management.profiles.readonly",
+    "https://www.googleapis.com/auth/chrome.management.reports.readonly",
+    "https://www.googleapis.com/auth/chrome.management.telemetry.readonly",
+    # Cloud Identity API: groups, SSO, and security/admin policy settings.
+    "https://www.googleapis.com/auth/cloud-identity.groups.readonly",
+    "https://www.googleapis.com/auth/cloud-identity.inboundsso.readonly",
+    "https://www.googleapis.com/auth/cloud-identity.policies.readonly",
 )
 EMAIL_PATTERN = re.compile(r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", re.I)
 DEFAULT_OPENAI_MODEL = "gpt-5.4-mini"

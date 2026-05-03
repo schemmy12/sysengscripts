@@ -175,6 +175,33 @@ class WorkspaceIntentTests(unittest.TestCase):
         self.assertIn("do not have an org-wide 2-Step Verification", reply)
         self.assertIn("should not pretend", reply)
 
+    def test_google_workspace_scope_pack_is_read_only_only(self) -> None:
+        self.assertEqual(
+            len(main.GOOGLE_WORKSPACE_READONLY_SCOPES),
+            len(set(main.GOOGLE_WORKSPACE_READONLY_SCOPES)),
+        )
+
+        forbidden_scopes = {
+            "https://www.googleapis.com/auth/admin.directory.user",
+            "https://www.googleapis.com/auth/admin.directory.user.security",
+            "https://www.googleapis.com/auth/admin.directory.group",
+            "https://www.googleapis.com/auth/admin.directory.group.member",
+            "https://www.googleapis.com/auth/admin.directory.orgunit",
+            "https://www.googleapis.com/auth/admin.directory.rolemanagement",
+            "https://www.googleapis.com/auth/apps.alerts",
+            "https://www.googleapis.com/auth/apps.groups.settings",
+            "https://www.googleapis.com/auth/apps.licensing",
+            "https://www.googleapis.com/auth/gmail.settings.basic",
+            "https://www.googleapis.com/auth/gmail.settings.sharing",
+        }
+
+        for scope in main.GOOGLE_WORKSPACE_READONLY_SCOPES:
+            self.assertTrue(
+                scope.endswith(".readonly") or scope.endswith(".read-only"),
+                scope,
+            )
+            self.assertNotIn(scope, forbidden_scopes)
+
 
 if __name__ == "__main__":
     unittest.main()
