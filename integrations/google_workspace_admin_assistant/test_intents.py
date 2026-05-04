@@ -32,6 +32,16 @@ class WorkspaceIntentTests(unittest.TestCase):
         self.assert_intent("show me suspended users", "list_users", mode="suspended")
         self.assert_intent("list admins", "list_users", mode="admins")
         self.assert_intent("show all users", "list_users", mode="all")
+        self.assert_intent(
+            "Can you show me a list of all my users",
+            "list_users",
+            mode="all",
+        )
+        self.assert_intent(
+            "what accounts are suspended",
+            "list_users",
+            mode="suspended",
+        )
 
     def test_user_lookup_natural_language(self) -> None:
         self.assert_intent("is Adam Schembri suspended?", "lookup_user", "Adam Schembri")
@@ -41,6 +51,11 @@ class WorkspaceIntentTests(unittest.TestCase):
             "aschembri@example.com",
         )
         self.assert_intent("find the account for Bruce", "lookup_user", "Bruce")
+        self.assert_intent(
+            "can you pull all info on Adam Schembri",
+            "lookup_user",
+            "Adam Schembri",
+        )
 
     def test_group_natural_language(self) -> None:
         self.assert_intent("what groups is Adam in?", "groups_for_user", "Adam")
@@ -50,10 +65,18 @@ class WorkspaceIntentTests(unittest.TestCase):
             "testgroup@example.com",
         )
         self.assert_intent("find group IT Security", "lookup_group", "IT Security")
+        self.assert_intent("show me Adam's groups", "groups_for_user", "Adam")
+        self.assert_intent(
+            "can you list users in testgroup@example.com",
+            "group_members",
+            "testgroup@example.com",
+        )
+        self.assert_intent("can you give me a list of all groups", "list_groups")
 
     def test_device_and_role_intents(self) -> None:
         self.assert_intent("list devices", "list_devices", mode="all")
         self.assert_intent("show chromebooks", "list_devices", mode="chromeos")
+        self.assert_intent("show me all chromebooks", "list_devices", mode="chromeos")
         self.assert_intent("find device ABC123", "lookup_devices", "ABC123")
         self.assert_intent("what devices does Adam have?", "lookup_devices", "Adam")
         self.assert_intent("list admin roles", "list_roles")
@@ -197,6 +220,16 @@ class WorkspaceIntentTests(unittest.TestCase):
         self.assertTrue(main.is_short_context_followup("that one"))
         self.assertTrue(main.is_short_context_followup("subscription status"))
         self.assertFalse(main.is_short_context_followup("what groups is Adam in?"))
+
+    def test_billing_questions_get_fast_not_wired_guardrail(self) -> None:
+        self.assertTrue(
+            main.is_billing_or_subscription_message(
+                "what do our billing subscriptions look like right now?"
+            )
+        )
+        reply = main.build_billing_not_wired_reply()
+        self.assertIn("not wired", reply)
+        self.assertIn("should not pretend", reply)
 
     def test_recent_group_list_emails_extracts_last_group_reply(self) -> None:
         key = "test-recent-groups"

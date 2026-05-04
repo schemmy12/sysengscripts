@@ -481,6 +481,11 @@ def extract_natural_user_lookup_query(text: str) -> str | None:
             r"^(?:find|lookup|look up|show|get)\s+(?:the\s+)?"
             r"(?:account|profile|user)\s+(?:for\s+)?(.+)$"
         ),
+        (
+            r"^(?:can\s+you\s+)?(?:pull|get|show|give\s+me)\s+"
+            r"(?:all\s+)?(?:info|information|details|profile|account)\s+"
+            r"(?:on|for|about)\s+(.+)$"
+        ),
         r"^(?:find|lookup|look up|show|get)\s+(.+?)'s\s+(?:account|profile|user)\??$",
         r"^(?:who|what)\s+is\s+(.+?)'s\s+(?:primary\s+)?email\??$",
     )
@@ -501,6 +506,27 @@ def clean_command_query(query: str) -> str | None:
 def extract_user_list_mode(text: str) -> str | None:
     normalized = normalize_slack_text(text)
     lower = normalized.lower().rstrip("?")
+
+    if re.search(r"\b(?:suspended|disabled)\b", lower) and re.search(
+        r"\b(?:users|accounts|people)\b",
+        lower,
+    ):
+        return "suspended"
+
+    if re.search(r"\b(?:super\s+admins?|admin\s+users?)\b", lower):
+        return "admins"
+
+    if re.search(r"\b(?:list|show|give|get|pull)\b", lower) and re.search(
+        r"\b(?:all\s+)?(?:my\s+|our\s+)?(?:users|accounts|people)\b",
+        lower,
+    ):
+        return "all"
+
+    if re.search(r"\b(?:how many|which|what)\b", lower) and re.search(
+        r"\b(?:users|accounts)\b",
+        lower,
+    ):
+        return "all"
 
     if lower in {
         "list users",
@@ -548,6 +574,7 @@ def extract_groups_for_user_query(text: str) -> str | None:
     patterns = (
         r"^(?:list|show)(?:\s+me)?\s+groups\s+(?:for|of)\s+(?:user\s+)?(.+)$",
         r"^groups\s+(?:for|of)\s+(?:user\s+)?(.+)$",
+        r"^(?:list|show)(?:\s+me)?\s+(.+?)'s\s+groups\??$",
         r"^(?:what|which)\s+groups\s+is\s+(.+?)\s+(?:in|a\s+member\s+of)\??$",
         r"^(?:what|which)\s+groups\s+does\s+(.+?)\s+belong\s+to\??$",
         r"^(?:what|which)\s+groups\s+does\s+(.+?)\s+have\??$",
@@ -590,6 +617,7 @@ def extract_group_members_query(text: str) -> str | None:
         r"^who\s+is\s+(?:a\s+)?member\s+of\s+(?:the\s+)?(?:group\s+)?(.+)$",
         r"^who(?:'s|\s+is)\s+in\s+(?:the\s+)?(?:group\s+)?(.+)$",
         r"^(?:list|show)\s+(?:the\s+)?members\s+(?:of|for|in)\s+(?:the\s+)?(?:group\s+)?(.+)$",
+        r"^(?:can\s+you\s+)?(?:list|show)\s+(?:the\s+)?(?:users|people)\s+(?:in|of|for)\s+(?:the\s+)?(?:group\s+)?(.+)$",
     )
 
     for pattern in patterns:
@@ -616,12 +644,21 @@ def extract_group_members_query(text: str) -> str | None:
 
 def is_list_groups_message(text: str) -> bool:
     normalized = normalize_slack_text(text).lower().rstrip("?")
-    return normalized in {"list groups", "show groups", "groups", "list all groups"}
+    if normalized in {"list groups", "show groups", "groups", "list all groups"}:
+        return True
+
+    if re.search(r"\b(?:member|members|user|users|who|each|those|these)\b", normalized):
+        return False
+
+    return bool(
+        re.search(r"\b(?:list|show|give|get|pull)\b", normalized)
+        and re.search(r"\b(?:all\s+)?(?:my\s+|our\s+)?groups?\b", normalized)
+    )
 
 
 def is_list_org_units_message(text: str) -> bool:
     normalized = normalize_slack_text(text).lower().rstrip("?")
-    return normalized in {
+    if normalized in {
         "list org units",
         "show org units",
         "org units",
@@ -631,12 +668,24 @@ def is_list_org_units_message(text: str) -> bool:
         "list ous",
         "show ous",
         "ous",
-    }
+    }:
+        return True
+
+    return bool(
+        re.search(r"\b(?:list|show|give|get|pull)\b", normalized)
+        and re.search(r"\b(?:org units?|organizational units?|ous)\b", normalized)
+    )
 
 
 def is_list_domains_message(text: str) -> bool:
     normalized = normalize_slack_text(text).lower().rstrip("?")
-    return normalized in {"list domains", "show domains", "domains"}
+    if normalized in {"list domains", "show domains", "domains"}:
+        return True
+
+    return bool(
+        re.search(r"\b(?:list|show|give|get|pull|what|which)\b", normalized)
+        and re.search(r"\bdomains?\b", normalized)
+    )
 
 
 def extract_device_lookup_query(text: str) -> str | None:
@@ -665,6 +714,20 @@ def extract_device_lookup_query(text: str) -> str | None:
 
 def extract_device_list_mode(text: str) -> str | None:
     normalized = normalize_slack_text(text).lower().rstrip("?")
+
+    if re.search(r"\b(?:chromebooks?|chromeos|chrome\s+devices?)\b", normalized):
+        if re.search(r"\b(?:list|show|give|get|pull|what|which)\b", normalized):
+            return "chromeos"
+
+    if re.search(r"\b(?:mobile|phones?)\b", normalized):
+        if re.search(r"\b(?:list|show|give|get|pull|what|which)\b", normalized):
+            return "mobile"
+
+    if re.search(r"\b(?:list|show|give|get|pull)\b", normalized) and re.search(
+        r"\b(?:all\s+)?devices?\b",
+        normalized,
+    ):
+        return "all"
 
     if normalized in {
         "list devices",
@@ -1013,6 +1076,18 @@ def detect_workspace_intent(text: str) -> WorkspaceIntent | None:
     if is_chrome_policy_schemas_message(text):
         return WorkspaceIntent("chrome_policy_schemas")
 
+    group_members_query = extract_group_members_query(text)
+    if group_members_query:
+        return WorkspaceIntent("group_members", query=group_members_query)
+
+    groups_for_user_query = extract_groups_for_user_query(text)
+    if groups_for_user_query:
+        return WorkspaceIntent("groups_for_user", query=groups_for_user_query)
+
+    role_query = extract_role_assignments_query(text)
+    if role_query:
+        return WorkspaceIntent("role_assignments_for_user", query=role_query)
+
     user_list_mode = extract_user_list_mode(text)
     if user_list_mode:
         return WorkspaceIntent("list_users", mode=user_list_mode)
@@ -1024,18 +1099,6 @@ def detect_workspace_intent(text: str) -> WorkspaceIntent | None:
     device_query = extract_device_lookup_query(text)
     if device_query:
         return WorkspaceIntent("lookup_devices", query=device_query)
-
-    role_query = extract_role_assignments_query(text)
-    if role_query:
-        return WorkspaceIntent("role_assignments_for_user", query=role_query)
-
-    groups_for_user_query = extract_groups_for_user_query(text)
-    if groups_for_user_query:
-        return WorkspaceIntent("groups_for_user", query=groups_for_user_query)
-
-    group_members_query = extract_group_members_query(text)
-    if group_members_query:
-        return WorkspaceIntent("group_members", query=group_members_query)
 
     group_lookup_query = extract_group_lookup_query(text)
     if group_lookup_query:
@@ -1134,6 +1197,30 @@ def build_common_reply(text: str) -> str | None:
         )
 
     return None
+
+
+def is_billing_or_subscription_message(text: str) -> bool:
+    normalized = normalize_slack_text(text).lower()
+    return bool(
+        re.search(
+            r"\b(?:billing|bill|invoice|invoices|subscription|subscriptions|"
+            r"renewal|renewals|payment|payments|license|licenses|seat|seats)\b",
+            normalized,
+        )
+        and not re.search(r"\b(?:gcp|google cloud|cloud billing)\b", normalized)
+    )
+
+
+def build_billing_not_wired_reply() -> str:
+    return (
+        "I can help explain where to check billing, but live Google Workspace "
+        "billing/subscription data is not wired as a backend lookup yet. "
+        "The current live tools can read users, groups, org units, domains, "
+        "devices, admin roles, login/usage reports, security policies, SSO, "
+        "and Chrome admin data. Billing is a separate Admin Console area, so "
+        "I should not pretend I can pull invoices, renewals, payment status, "
+        "or exact seat subscription totals until we add a real billing source."
+    )
 
 
 @lru_cache(maxsize=1)
@@ -3603,12 +3690,27 @@ async def finish_slack_placeholder(
     await post_slack_message(channel, text, thread_ts)
 
 
+async def ensure_slack_placeholder(
+    channel: str,
+    placeholder: str,
+    thread_ts: str | None,
+    placeholder_ts: str | None = None,
+) -> str | None:
+    if placeholder_ts:
+        if await update_slack_message(channel, placeholder_ts, placeholder):
+            return placeholder_ts
+        logger.warning("Could not update existing Slack placeholder; posting a new one.")
+
+    return await post_slack_message(channel, placeholder, thread_ts)
+
+
 async def handle_workspace_intent(
     event: dict[str, Any],
     intent: WorkspaceIntent,
     channel: str,
     thread_ts: str | None,
     history_key: str,
+    placeholder_ts: str | None = None,
 ) -> None:
     audit_slack_action(event, intent.name, intent.query)
     clear_pending_action(history_key)
@@ -3616,10 +3718,11 @@ async def handle_workspace_intent(
     user_text = user_text if isinstance(user_text, str) else ""
 
     if intent.name == "admin_test":
-        placeholder_ts = await post_slack_message(
+        placeholder_ts = await ensure_slack_placeholder(
             channel,
             "Checking Google Workspace Admin SDK access...",
             thread_ts,
+            placeholder_ts,
         )
         reply = await build_admin_test_reply_safely()
         await finish_slack_placeholder(channel, placeholder_ts, reply, thread_ts)
@@ -3627,10 +3730,11 @@ async def handle_workspace_intent(
         return
 
     if intent.name == "lookup_user" and intent.query:
-        placeholder_ts = await post_slack_message(
+        placeholder_ts = await ensure_slack_placeholder(
             channel,
             f"Looking up Google Workspace user `{intent.query}`...",
             thread_ts,
+            placeholder_ts,
         )
         reply = await build_find_user_reply_safely(intent.query)
         await finish_slack_placeholder(channel, placeholder_ts, reply, thread_ts)
@@ -3811,7 +3915,12 @@ async def handle_workspace_intent(
         remember_conversation_turn(history_key, user_text, reply)
         return
 
-    placeholder_ts = await post_slack_message(channel, placeholder, thread_ts)
+    placeholder_ts = await ensure_slack_placeholder(
+        channel,
+        placeholder,
+        thread_ts,
+        placeholder_ts,
+    )
     reply = await build_workspace_command_reply_safely(command_name, builder, *args)
     await finish_slack_placeholder(channel, placeholder_ts, reply, thread_ts)
     remember_conversation_turn(history_key, user_text, reply)
@@ -3936,6 +4045,7 @@ async def handle_slack_event_reply(event: dict[str, Any]) -> None:
     thread_ts = reply_thread_ts(event)
     history_key = conversation_key(event)
     recent_context = recent_conversation_context(history_key)
+    placeholder_ts: str | None = None
 
     user_id = event.get("user")
     if not slack_user_allowed(user_id if isinstance(user_id, str) else None):
@@ -3993,8 +4103,19 @@ async def handle_slack_event_reply(event: dict[str, Any]) -> None:
             remember_conversation_turn(history_key, text, common_reply)
             return
 
+        if is_billing_or_subscription_message(text):
+            audit_slack_action(event, "billing_not_wired")
+            reply = build_billing_not_wired_reply()
+            await post_slack_message(channel, reply, thread_ts)
+            remember_conversation_turn(history_key, text, reply)
+            return
+
         if not (recent_context and is_short_context_followup(text)):
+            placeholder_task = asyncio.create_task(
+                post_slack_message(channel, "Thinking...", thread_ts)
+            )
             ai_workspace_intent = await classify_workspace_intent_safely(text)
+            placeholder_ts = await placeholder_task
             if ai_workspace_intent:
                 await handle_workspace_intent(
                     event,
@@ -4002,6 +4123,7 @@ async def handle_slack_event_reply(event: dict[str, Any]) -> None:
                     channel,
                     thread_ts,
                     history_key,
+                    placeholder_ts,
                 )
                 logger.info(
                     "AI-routed Workspace Slack flow completed in %.0f ms; intent=%s",
@@ -4011,7 +4133,8 @@ async def handle_slack_event_reply(event: dict[str, Any]) -> None:
                 return
 
     audit_slack_action(event, "gpt_fallback")
-    placeholder_ts = await post_slack_message(channel, "Thinking...", thread_ts)
+    if not placeholder_ts:
+        placeholder_ts = await post_slack_message(channel, "Thinking...", thread_ts)
     reply = await build_gpt_reply_safely(
         event,
         recent_context,
