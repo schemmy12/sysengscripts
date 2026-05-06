@@ -548,6 +548,31 @@ function renderContent(content, secTitle) {
   }).join('');
 }
 
+function hasRenderableContent(el) {
+  if (!el) return false;
+  if (el.type === 'embed') return !!(el.url || toText(el.text).trim());
+  if (el.type === 'image') return !!toText(el.text).trim();
+  if (el.type === 'list' || el.type === 'olist') {
+    return (el.items || []).some(item => toText(item).trim());
+  }
+  if (el.type === 'table') {
+    if (toText(el.text).trim()) return true;
+    return (el.rows || []).some(row =>
+      (row || []).some(cell => toText(cell).trim() || cell.embedSrc)
+    );
+  }
+  return !!toText(el.text).trim();
+}
+
+function pruneEmptySections(categories) {
+  return (categories || []).map(cat => ({
+    ...cat,
+    sections: (cat.sections || []).filter(sec =>
+      (sec.content || []).some(hasRenderableContent)
+    )
+  })).filter(cat => cat.sections.length > 0);
+}
+
 // ── State ──
 let CATS = [];
 
@@ -809,7 +834,7 @@ async function init() {
     const data = await res.json();
     if (data.error) throw new Error(data.error);
     clearInterval(msgTimer);
-    CATS = data.categories || [];
+    CATS = pruneEmptySections(data.categories || []);
     buildSidebar();
     buildPanels();
   } catch(e) {
