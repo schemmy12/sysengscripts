@@ -37,6 +37,9 @@ const BIRTHDAY_CACHE_TTL_SEC = 6 * 60 * 60;
 const NEWSLETTER_CACHE_KEY = 'newsletter_data_v1';
 const NEWSLETTER_CACHE_TTL_SEC = 15 * 60;
 const MAILCHIMP_FOLDER_CACHE_TTL_SEC = 6 * 60 * 60;
+const DRIVE_GALLERY_CACHE_KEY = 'drive_gallery_data_v1';
+const DRIVE_GALLERY_CACHE_TTL_SEC = 15 * 60;
+const DRIVE_GALLERY_DEFAULT_FOLDER_ID = '1Jg5qiNyPbD694KunbORUDSOYw0s4vq90';
 
 // ── Router ────────────────────────────────────────────────────────────
 function doGet(e) {
@@ -46,6 +49,7 @@ function doGet(e) {
     if (type === "handbook") return handbookResponse();
     if (type === "birthdays") return birthdaysResponse();
     if (type === "newsletter") return newsletterResponse();
+    if (type === "driveGallery") return driveGalleryResponse(e);
     return directoryResponse();
   } catch (err) {
     return jsonResponse({ error: err.message });
@@ -874,6 +878,162 @@ function queryString(params) {
     .join('&');
 }
 
+// ── Drive Gallery ─────────────────────────────────────────────────────
+function driveGalleryResponse(e) {
+  const params = (e && e.parameter) || {};
+  const folderId = extractDriveFolderId(params.folderId || params.folder || params.url) || DRIVE_GALLERY_DEFAULT_FOLDER_ID;
+  if (!folderId) throw new Error('Missing Drive folder ID');
+  assertDriveGalleryFolderAllowed(folderId);
+
+  const maxItems = clampNumber(params.max || 80, 1, 120);
+  const includeFolders = params.includeFolders !== 'false';
+  const cacheKey = `${DRIVE_GALLERY_CACHE_KEY}:${folderId}:${maxItems}:${includeFolders}`;
+  const cache = CacheService.getScriptCache();
+  const cached = cache.get(cacheKey);
+  if (cached) return jsonResponse(JSON.parse(cached));
+
+  const folder = getDriveGalleryFolder(folderId);
+  const items = [];
+
+  if (includeFolders) {
+    const folders = folder.getFolders();
+    while (folders.hasNext() && items.length < maxItems) {
+      const child = folders.next();
+      if (!driveItemIsTrashed(child)) items.push(normaliseDriveFolder(child));
+    }
+  }
+
+  const files = folder.getFiles();
+  while (files.hasNext() && items.length < maxItems) {
+    const file = files.next();
+    if (!driveItemIsTrashed(file)) items.push(normaliseDriveFile(file));
+  }
+
+  items.sort((a, b) => {
+    const typeOrder = { folder: 0, image: 1, video: 2, file: 3 };
+    return (typeOrder[a.type] - typeOrder[b.type]) || a.name.localeCompare(b.name);
+  });
+
+  const result = {
+    folderId,
+    title: params.title || folder.getName(),
+    count: items.length,
+    generatedAt: new Date().toISOString(),
+    items
+  };
+  cache.put(cacheKey, JSON.stringify(result), DRIVE_GALLERY_CACHE_TTL_SEC);
+  return jsonResponse(result);
+}
+
+function extractDriveFolderId(value) {
+  const text = fieldText(value);
+  if (!text) return '';
+  let m = text.match(/drive\.google\.com\/drive\/(?:u\/\d+\/)?folders\/([a-zA-Z0-9_-]+)/);
+  if (m) return m[1];
+  m = text.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+  if (m) return m[1];
+  return /^[a-zA-Z0-9_-]{20,}$/.test(text) ? text : '';
+}
+
+function assertDriveGalleryFolderAllowed(folderId) {
+  if (folderId === DRIVE_GALLERY_DEFAULT_FOLDER_ID) return;
+  const allowedRaw = PropertiesService.getScriptProperties().getProperty('DRIVE_GALLERY_FOLDER_IDS');
+  if (!allowedRaw) return;
+  const allowed = allowedRaw.split(',').map(s => s.trim()).filter(Boolean);
+  if (allowed.indexOf(folderId) === -1) {
+    throw new Error('Drive folder is not allowlisted for gallery embeds');
+  }
+}
+
+function getDriveGalleryFolder(folderId) {
+  try {
+    return DriveApp.getFolderById(folderId);
+  } catch(e) {
+    throw new Error(`Drive gallery folder is not accessible to this Apps Script deployment. Folder ID: ${folderId}. Share the folder with the Apps Script owner and deploy the web app to execute as "Me". Original error: ${e.message}`);
+  }
+}
+
+function driveItemIsTrashed(item) {
+  try {
+    return item.isTrashed();
+  } catch(e) {
+    return false;
+  }
+}
+
+function normaliseDriveFolder(folder) {
+  return {
+    id: folder.getId(),
+    name: folder.getName(),
+    type: 'folder',
+    url: folder.getUrl()
+  };
+}
+
+function normaliseDriveFile(file) {
+  const id = file.getId();
+  const mimeType = file.getMimeType();
+  if (mimeType === 'application/vnd.google-apps.shortcut') {
+    return normaliseDriveShortcut(file, id, mimeType);
+  }
+
+  const isImage = /^image\//.test(mimeType);
+  const isVideo = /^video\//.test(mimeType);
+  return {
+    id,
+    name: file.getName(),
+    type: isImage ? 'image' : (isVideo ? 'video' : 'file'),
+    mimeType,
+    url: file.getUrl(),
+    thumbnailUrl: isImage || isVideo ? `https://drive.google.com/thumbnail?id=${encodeURIComponent(id)}&sz=w800` : ''
+  };
+}
+
+function normaliseDriveShortcut(file, id, mimeType) {
+  let targetId = '';
+  let targetMimeType = '';
+  let targetResourceKey = '';
+
+  try { targetId = file.getTargetId(); } catch(e) {}
+  try { targetMimeType = file.getTargetMimeType(); } catch(e) {}
+  try { targetResourceKey = file.getTargetResourceKey(); } catch(e) {}
+
+  const targetIsFolder = targetMimeType === 'application/vnd.google-apps.folder';
+  const targetIsImage = /^image\//.test(targetMimeType);
+  const targetIsVideo = /^video\//.test(targetMimeType);
+  const targetType = targetIsFolder ? 'folder' : (targetIsImage ? 'image' : (targetIsVideo ? 'video' : 'file'));
+  let targetUrl = file.getUrl();
+
+  if (targetId) {
+    targetUrl = targetIsFolder
+      ? `https://drive.google.com/drive/folders/${encodeURIComponent(targetId)}`
+      : `https://drive.google.com/file/d/${encodeURIComponent(targetId)}/view`;
+    if (targetResourceKey) {
+      targetUrl += `${targetUrl.indexOf('?') === -1 ? '?' : '&'}resourcekey=${encodeURIComponent(targetResourceKey)}`;
+    }
+  }
+
+  return {
+    id,
+    name: file.getName(),
+    type: targetType,
+    mimeType,
+    shortcut: true,
+    targetId,
+    targetMimeType,
+    url: targetUrl,
+    thumbnailUrl: (targetId && (targetIsImage || targetIsVideo))
+      ? `https://drive.google.com/thumbnail?id=${encodeURIComponent(targetId)}&sz=w800`
+      : ''
+  };
+}
+
+function clampNumber(value, min, max) {
+  const n = Number(value);
+  if (!isFinite(n)) return min;
+  return Math.max(min, Math.min(max, Math.round(n)));
+}
+
 // ── Calendar ──────────────────────────────────────────────────────────
 function calendarResponse() {
   const { token, baseId } = getProps();
@@ -967,6 +1127,28 @@ function diagnoseMailchimpNewsletter() {
   Logger.log("Mailchimp audience ID: " + config.audienceId);
   Logger.log("Mailchimp folder: " + (config.folderName || folderId) + " (" + folderId + ")");
   Logger.log(campaign ? JSON.stringify(normaliseNewsletter(campaign), null, 2) : "No sent newsletter found yet.");
+}
+
+function diagnoseDriveGallery() {
+  Logger.log('Effective user: ' + Session.getEffectiveUser().getEmail());
+  Logger.log('Default folder ID: ' + DRIVE_GALLERY_DEFAULT_FOLDER_ID);
+  const folder = getDriveGalleryFolder(DRIVE_GALLERY_DEFAULT_FOLDER_ID);
+  Logger.log('Folder name: ' + folder.getName());
+  Logger.log('Folder URL: ' + folder.getUrl());
+  const folders = folder.getFolders();
+  const files = folder.getFiles();
+  let folderCount = 0;
+  let fileCount = 0;
+  while (folders.hasNext() && folderCount < 5) {
+    Logger.log('Child folder: ' + folders.next().getName());
+    folderCount++;
+  }
+  while (files.hasNext() && fileCount < 5) {
+    const file = files.next();
+    Logger.log('Child file: ' + file.getName() + ' (' + file.getMimeType() + ')');
+    fileCount++;
+  }
+  Logger.log('Drive gallery diagnostic complete');
 }
 
 function warmHandbookCache() {
