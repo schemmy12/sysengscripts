@@ -1,0 +1,13 @@
+# Secrets
+.env
+
+# HR data — contains PII, never commit
+hr_export.csv
+*.csv
+
+# Audit logs from live runs
+backfill-log-*.json
+
+# Node
+node_modules/
+npm-debug.log*

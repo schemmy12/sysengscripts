@@ -1,0 +1,17 @@
+{
+  "name": "okta-profile-sync",
+  "version": "1.0.0",
+  "description": "One-time backfill of Okta profile attributes for users who predate the TriNet -> Okta integration",
+  "main": "backfill-okta-profiles.js",
+  "scripts": {
+    "dry-run": "node backfill-okta-profiles.js --csv ./hr_export.csv --dry-run",
+    "run-live": "node backfill-okta-profiles.js --csv ./hr_export.csv"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "private": true
+}
