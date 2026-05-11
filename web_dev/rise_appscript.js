@@ -45,8 +45,8 @@ const DRIVE_GALLERY_DEFAULT_FOLDER_ID = '1Jg5qiNyPbD694KunbORUDSOYw0s4vq90';
 function doGet(e) {
   try {
     const type = (e && e.parameter && e.parameter.type) ? e.parameter.type : "directory";
+    if (type === "handbook") return handbookResponse(e);
     if (type === "calendar") return calendarResponse();
-    if (type === "handbook") return handbookResponse();
     if (type === "birthdays") return birthdaysResponse();
     if (type === "newsletter") return newsletterResponse();
     if (type === "driveGallery") return driveGalleryResponse(e);
@@ -57,14 +57,27 @@ function doGet(e) {
 }
 
 // ── Handbook ──────────────────────────────────────────────────────────
-const HB_CACHE_KEY      = 'handbook_data_v3';
-const HB_CHUNK_SIZE     = 90 * 1024;
-const HB_CACHE_TTL_SEC  = 600;
+const HB_CACHE_KEY      = 'handbook_data_v4';
+const HB_CHUNK_SIZE     = 60 * 1024;
+const HB_CACHE_TTL_SEC  = 6 * 60 * 60;
 const HB_MAX_CHUNKS     = 50;
 
-function handbookResponse() {
-  const cached = readHandbookCache();
-  if (cached) return jsonResponse(JSON.parse(cached));
+function handbookResponse(e) {
+  const params = (e && e.parameter) || {};
+  const refresh = params.refresh === '1' || params.refresh === 'true';
+
+  if (!refresh) {
+    const cached = readHandbookCache();
+    if (cached) {
+      try {
+        return jsonResponse(JSON.parse(cached));
+      } catch(err) {
+        Logger.log('handbookResponse: cached JSON was invalid, rebuilding cache: ' + err.message);
+        clearHandbookCache();
+      }
+    }
+  }
+
   const categories = parseHandbookDoc(HANDBOOK_DOC_ID);
   const result = { categories };
   const serialised = JSON.stringify(result);
@@ -114,6 +127,7 @@ function clearHandbookCache() {
   const cache = CacheService.getScriptCache();
   cache.remove('handbook_data');
   cache.remove('handbook_data_v2:index');
+  cache.remove('handbook_data_v3:index');
   const indexRaw = cache.get(HB_CACHE_KEY + ':index');
   const keys = [HB_CACHE_KEY + ':index'];
   if (indexRaw) {

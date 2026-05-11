@@ -58,7 +58,7 @@ body{font-family:'Poppins',sans-serif;background:var(--off-white);color:var(--te
 .cat-btn.open .cat-chevron{transform:rotate(180deg);}
 .cat-sections{display:none;}
 .cat-sections.open{display:block;}
-.sec-btn{display:block;width:100%;padding:8px 16px 8px 28px;background:none;border:none;border-bottom:1px solid #f0f0f0;cursor:pointer;font-size:12px;color:var(--muted);font-family:'Poppins',sans-serif;text-align:left;line-height:1.4;transition:all .15s;}
+.sec-btn{display:block;width:100%;padding:8px 16px 8px 28px;background:none;border:none;border-bottom:1px solid #f0f0f0;cursor:pointer;font-size:12px;color:var(--muted);font-family:'Poppins',sans-serif;text-align:left;line-height:1.4;text-decoration:none;transition:all .15s;}
 .sec-btn:hover{color:var(--navy);background:#f4f7ff;}
 .sec-btn.active{color:var(--bright-blue);font-weight:600;background:#e8f0ff;border-left:3px solid var(--bright-blue);padding-left:25px;}
 
@@ -71,8 +71,6 @@ body{font-family:'Poppins',sans-serif;background:var(--off-white);color:var(--te
 .content-panel h4{font-size:14px;font-weight:600;color:var(--bright-blue);margin:16px 0 8px;}
 .content-panel p{font-size:14px;line-height:1.8;color:var(--text);margin-bottom:12px;}
 .content-panel ul,.content-panel ol{padding-left:24px;margin:8px 0 14px;}
-.content-panel ul.hb-supporting-list,.content-panel ol.hb-supporting-list{margin-left:36px;padding-left:24px;}
-.content-panel ul.hb-supporting-list{list-style-type:circle;}
 .content-panel li{font-size:14px;line-height:1.75;color:var(--text);margin-bottom:6px;padding-left:2px;}
 .content-panel li>ul,.content-panel li>ol{margin:4px 0 4px;padding-left:28px;}
 .content-panel ul ul{list-style-type:circle;}
@@ -151,7 +149,6 @@ body{font-family:'Poppins',sans-serif;background:var(--off-white);color:var(--te
   .hero-title{font-size:34px;}
   .handbook-home{grid-template-columns:1fr 1fr;}
   .content-panel{padding:20px;}
-  .content-panel ul.hb-supporting-list,.content-panel ol.hb-supporting-list{margin-left:18px;}
   .uni-grid{grid-template-columns:repeat(2,1fr);}
 }
 </style>
@@ -309,6 +306,61 @@ function esc(s) { return toText(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').re
 // (e.g. "1. Getting Started" -> "Getting Started", "2.1 Community Events" -> "Community Events")
 // The Google Doc keeps the numbers so the Apps Script parser still works correctly.
 function stripNum(s) { return toText(s).replace(/^\s*\d+(?:\.\d+)*\.?\s+/, ''); }
+function slugifySectionTitle(s) {
+  const slug = stripNum(s)
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/&/g, ' and ')
+    .replace(/['\u2019]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  return slug || 'section';
+}
+function addSectionMetadata(categories) {
+  const usedSlugs = {};
+  return (categories || []).map((cat, ci) => ({
+    ...cat,
+    id: `c${ci}`,
+    sections: (cat.sections || []).map((sec, si) => {
+      const baseSlug = slugifySectionTitle(sec.title);
+      const slugCount = usedSlugs[baseSlug] || 0;
+      usedSlugs[baseSlug] = slugCount + 1;
+      return {
+        ...sec,
+        id: `c${ci}s${si}`,
+        catId: `c${ci}`,
+        slug: slugCount ? `${baseSlug}-${slugCount + 1}` : baseSlug
+      };
+    })
+  }));
+}
+function getHashSlug() {
+  const raw = window.location.hash.replace(/^#/, '');
+  try { return decodeURIComponent(raw).trim(); }
+  catch(e) { return raw.trim(); }
+}
+function getSectionIdBySlug(slug) {
+  const cleanSlug = toText(slug).trim();
+  if (!cleanSlug) return null;
+  for (const cat of CATS) {
+    for (const sec of cat.sections || []) {
+      if (sec.slug === cleanSlug) return sec.id;
+    }
+  }
+  return null;
+}
+function clearSectionHash() {
+  if (!window.location.hash) return;
+  history.pushState(null, '', window.location.pathname + window.location.search);
+}
+function updateSectionHash(secId) {
+  const panel = document.getElementById(`panel-${secId}`);
+  const slug = panel && panel.dataset.sectionSlug;
+  if (!slug) return;
+  const nextHash = `#${encodeURIComponent(slug)}`;
+  if (window.location.hash !== nextHash) history.pushState(null, '', nextHash);
+}
 // Auto-link URLs and emails in already-escaped text. Run AFTER esc(), never before.
 // URL regex matches http(s)://... up to whitespace or common trailing punctuation.
 // Email regex is intentionally loose to catch typical addresses.
@@ -461,14 +513,13 @@ function getContentText(el) {
   if (el.rows) parts.push(el.rows.flat().map(cell => `${toText(cell)} ${getUrls(cell).join(' ')}`));
   return parts.map(toText).filter(Boolean).join(' ');
 }
-function renderListNodes(nodes, tag, className) {
-  const classAttr = className ? ` class="${className}"` : '';
-  return `<${tag}${classAttr}>${nodes.map(node => {
+function renderListNodes(nodes, tag) {
+  return `<${tag}>${nodes.map(node => {
     const children = node.children.length ? renderListNodes(node.children, tag) : '';
     return `<li>${renderRichText(node.item)}${children}</li>`;
   }).join('')}</${tag}>`;
 }
-function renderNestedList(items, type, className) {
+function renderNestedList(items, type) {
   const tag = type === 'olist' ? 'ol' : 'ul';
   const root = { level: -1, children: [] };
   const stack = [root];
@@ -482,17 +533,13 @@ function renderNestedList(items, type, className) {
     stack.push(node);
   });
 
-  return renderListNodes(root.children, tag, className);
-}
-function isSupportingListLabel(el) {
-  const text = toText(el && el.text).trim();
-  return el && el.type === 'p' && /:\s*$/.test(text) && text.length <= 90;
+  return renderListNodes(root.children, tag);
 }
 
 function renderContent(content, secTitle) {
   const isUniSection = secTitle && secTitle.includes('12.');
   let uniRendered = false;
-  return content.map((el, idx) => {
+  return content.map(el => {
     if (el.type === 'h3') return `<h3${docLayoutStyle(el)}>${renderRichText(el)}</h3>`;
     if (el.type === 'h4') return `<h4${docLayoutStyle(el)}>${renderRichText(el)}</h4>`;
     if (el.type === 'embed') {
@@ -533,8 +580,7 @@ function renderContent(content, secTitle) {
       return `<div class="table-ph">📊 ${esc(el.text || 'Table')}</div>`;
     }
     if (el.type === 'list' || el.type === 'olist') {
-      const className = isSupportingListLabel(content[idx - 1]) ? 'hb-supporting-list' : '';
-      return renderNestedList(el.items || [], el.type, className);
+      return renderNestedList(el.items || [], el.type);
     }
     if (el.type === 'p') {
       const t = el.text;
@@ -581,13 +627,15 @@ function buildSidebar() {
   const sb = document.getElementById('sidebar');
   let html = '<div class="sidebar-header">Contents</div>';
   CATS.forEach((cat, ci) => {
-    html += `<button class="cat-btn" data-cat="c${ci}" onclick="toggleCat('c${ci}')">
+    const catId = cat.id || `c${ci}`;
+    html += `<button class="cat-btn" data-cat="${catId}" onclick="toggleCat('${catId}')">
       <span>${getCatIcon(cat.title)}</span> ${esc(stripNum(cat.title))}
       <span class="cat-chevron">▼</span>
     </button>
-    <div class="cat-sections" id="cat-c${ci}">`;
+    <div class="cat-sections" id="cat-${catId}">`;
     cat.sections.forEach((sec, si) => {
-      html += `<button class="sec-btn" id="nav-c${ci}s${si}" onclick="showSection('c${ci}s${si}')">${esc(stripNum(sec.title))}</button>`;
+      const secId = sec.id || `${catId}s${si}`;
+      html += `<a class="sec-btn" id="nav-${secId}" href="#${escAttr(sec.slug || secId)}" onclick="event.preventDefault(); showSection('${secId}')">${esc(stripNum(sec.title))}</a>`;
     });
     html += '</div>';
   });
@@ -613,8 +661,10 @@ function buildPanels() {
   let secHtml = '';
   CATS.forEach((cat, ci) => {
     cat.sections.forEach((sec, si) => {
-      secHtml += `<div class="content-panel" id="panel-c${ci}s${si}">
-        <h2>${esc(stripNum(sec.title))}</h2>
+      const secId = sec.id || `c${ci}s${si}`;
+      const slug = sec.slug || secId;
+      secHtml += `<div class="content-panel" id="panel-${secId}" data-section-slug="${escAttr(slug)}">
+        <h2 id="${escAttr(slug)}">${esc(stripNum(sec.title))}</h2>
         ${renderContent(sec.content, sec.title)}
       </div>`;
     });
@@ -623,7 +673,8 @@ function buildPanels() {
 }
 
 // ── Navigation ──
-function showHome() {
+function showHome(options = {}) {
+  const updateUrl = options.updateUrl !== false;
   document.querySelectorAll('.content-panel').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.sec-btn').forEach(b => { b.classList.remove('active'); b.style.display=''; });
   document.querySelectorAll('.cat-btn').forEach(b => b.classList.remove('open'));
@@ -632,6 +683,7 @@ function showHome() {
   if (home) home.classList.add('active');
   document.getElementById('hb-search').value = '';
   closeSearchResults();
+  if (updateUrl) clearSectionHash();
   window.scrollTo({ top:0, behavior:'smooth' });
 }
 
@@ -644,22 +696,51 @@ function toggleCat(catId) {
   if (!isOpen) { btn.classList.add('open'); sec.classList.add('open'); }
 }
 
-function showSection(secId) {
+function showSection(secId, options = {}) {
+  const updateUrl = options.updateUrl !== false;
+  const shouldScroll = options.scroll !== false;
+  const panel = document.getElementById(`panel-${secId}`);
+  if (!panel) return false;
+
   document.querySelectorAll('.content-panel').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.sec-btn').forEach(b => b.classList.remove('active'));
-  const panel = document.getElementById(`panel-${secId}`);
   const navBtn = document.getElementById(`nav-${secId}`);
-  if (panel) panel.classList.add('active');
+  const catId = navBtn && navBtn.closest('.cat-sections') ? navBtn.closest('.cat-sections').id.replace(/^cat-/, '') : '';
+
+  document.querySelectorAll('.cat-btn').forEach(b => b.classList.remove('open'));
+  document.querySelectorAll('.cat-sections').forEach(s => s.classList.remove('open'));
+  if (catId) {
+    document.querySelector(`[data-cat="${catId}"]`)?.classList.add('open');
+    document.getElementById(`cat-${catId}`)?.classList.add('open');
+  }
+
+  panel.classList.add('active');
   if (navBtn) navBtn.classList.add('active');
-  window.scrollTo({ top:0, behavior:'smooth' });
+  if (updateUrl) updateSectionHash(secId);
+  if (shouldScroll) window.scrollTo({ top:0, behavior:'smooth' });
+  return true;
 }
 
 function openCategory(catId) {
   toggleCat(catId);
   const idx = parseInt(catId.replace('c',''));
   const cat = CATS[idx];
-  if (cat && cat.sections.length > 0) showSection(`${catId}s0`);
+  if (cat && cat.sections.length > 0) showSection(cat.sections[0].id || `${catId}s0`);
 }
+
+function openSectionFromHash() {
+  const id = getSectionIdBySlug(getHashSlug());
+  return id ? showSection(id, { updateUrl:false, scroll:false }) : false;
+}
+
+window.addEventListener('hashchange', () => {
+  if (!CATS.length) return;
+  if (!window.location.hash) {
+    showHome({ updateUrl:false });
+    return;
+  }
+  openSectionFromHash();
+});
 
 // ── Search ──
 let hbSearchResults = [];
@@ -699,7 +780,7 @@ function rankedSearchResults(q) {
 
   CATS.forEach((cat, ci) => {
     cat.sections.forEach((sec, si) => {
-      const id = `c${ci}s${si}`;
+      const id = sec.id || `c${ci}s${si}`;
       const title = stripNum(sec.title);
       const catTitle = stripNum(cat.title);
       const text = sectionSearchText(sec);
@@ -795,7 +876,7 @@ function updateHandbookSearch() {
   if (!q) { showHome(); return; }
   const search = rankedSearchResults(q);
   renderSearchResults(q, search.results);
-  if (search.firstMatch) showSection(search.firstMatch);
+  if (search.firstMatch) showSection(search.firstMatch, { updateUrl:false });
 }
 
 document.getElementById('hb-search').addEventListener('input', updateHandbookSearch);
@@ -834,9 +915,10 @@ async function init() {
     const data = await res.json();
     if (data.error) throw new Error(data.error);
     clearInterval(msgTimer);
-    CATS = pruneEmptySections(data.categories || []);
+    CATS = addSectionMetadata(pruneEmptySections(data.categories || []));
     buildSidebar();
     buildPanels();
+    openSectionFromHash();
   } catch(e) {
     clearInterval(msgTimer);
     document.getElementById('sidebar').innerHTML = '<div class="sidebar-header">Contents</div>';
