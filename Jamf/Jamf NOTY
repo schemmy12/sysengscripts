@@ -1,0 +1,158 @@
+#!/bin/bash
+
+JAMF_HELPER="/Library/Application Support/JAMF/bin/jamfHelper.app/Contents/MacOS/jamfHelper"
+MSUPDATE="/Library/Application Support/Microsoft/MAU2.0/Microsoft AutoUpdate.app/Contents/MacOS/msupdate"
+MAU_PKG="/tmp/Microsoft_AutoUpdate.pkg"
+
+DEFER_FILE="/var/tmp/office_update_deferred"
+
+echo "Starting Office remediation..."
+
+# -----------------------------
+# 1. Ensure MAU exists
+# -----------------------------
+if [ ! -f "$MSUPDATE" ]; then
+    echo "MAU not found. Installing..."
+    curl -L -o "$MAU_PKG" "https://go.microsoft.com/fwlink/?linkid=830196"
+    /usr/sbin/installer -pkg "$MAU_PKG" -target /
+    sleep 5
+fi
+
+# -----------------------------
+# 2. Bootstrap MAU (fix XPC issues)
+# -----------------------------
+echo "Bootstrapping Microsoft AutoUpdate..."
+
+launchctl bootout system /Library/LaunchDaemons/com.microsoft.autoupdate.helper.plist 2>/dev/null
+launchctl bootstrap system /Library/LaunchDaemons/com.microsoft.autoupdate.helper.plist 2>/dev/null
+
+sleep 5
+
+# -----------------------------
+# 3. Get logged-in user
+# -----------------------------
+CURRENT_USER=$(stat -f %Su /dev/console)
+
+if [ "$CURRENT_USER" = "root" ]; then
+    echo "No logged-in user. Proceeding silently..."
+else
+
+    # -----------------------------
+    # 4. Deferral check
+    # -----------------------------
+    if [ -f "$DEFER_FILE" ]; then
+        echo "User already deferred once. No deferral allowed."
+        ALLOW_DEFER=false
+    else
+        ALLOW_DEFER=true
+    fi
+
+    echo "Launching jamfHelper UI..."
+
+    # -----------------------------
+    # 5. jamfHelper UI
+    # -----------------------------
+    if [ "$ALLOW_DEFER" = true ]; then
+
+        RESPONSE=$(sudo -u "$CURRENT_USER" "$JAMF_HELPER" \
+        -windowType utility \
+        -title "Microsoft Office Security Update Required" \
+        -heading "Security Update Required" \
+        -description "Microsoft Office will close in 5 minutes to install a required security update.
+
+• Please save your work
+• Close any Office apps if possible
+
+This update is required to keep your device secure.
+Hillspire IT Team" \
+        -button1 "Update Now" \
+        -button2 "Defer (1 hour)" \
+        -defaultButton 1 \
+        -timeout 300 \
+        -countdown \
+        -icon "/Applications/Microsoft Word.app/Contents/Resources/Word.icns")
+
+        echo "jamfHelper response: $RESPONSE"
+
+        if [ "$RESPONSE" = "2" ]; then
+            echo "User deferred update"
+            touch "$DEFER_FILE"
+            exit 0
+        fi
+
+    else
+        echo "No deferral allowed, showing forced countdown"
+
+        sudo -u "$CURRENT_USER" "$JAMF_HELPER" \
+        -windowType utility \
+        -title "Microsoft Office Security Update Required" \
+        -heading "Updating Microsoft Office" \
+        -description "Microsoft Office will close shortly to complete a required security update.
+
+Please save your work." \
+        -button1 "OK" \
+        -defaultButton 1 \
+        -timeout 300 \
+        -countdown \
+        -icon "/Applications/Microsoft Word.app/Contents/Resources/Word.icns"
+    fi
+fi
+
+# -----------------------------
+# 6. Close Office apps
+# -----------------------------
+echo "Closing Office apps..."
+
+pkill "Microsoft Word"
+pkill "Microsoft Excel"
+pkill "Microsoft PowerPoint"
+pkill "Microsoft Outlook"
+
+sleep 5
+
+# -----------------------------
+# 7. Run update (Attempt 1 - system)
+# -----------------------------
+echo "Running Microsoft AutoUpdate (system context)..."
+
+"$MSUPDATE" --install --apps ALL
+RESULT=$?
+
+# -----------------------------
+# 8. Retry as logged-in user if failed
+# -----------------------------
+if [ $RESULT -ne 0 ]; then
+    echo "First attempt failed. Retrying in user context..."
+
+    if [ "$CURRENT_USER" != "root" ]; then
+        sudo -u "$CURRENT_USER" "$MSUPDATE" --install --apps ALL
+        RESULT=$?
+    fi
+fi
+
+# -----------------------------
+# 9. Final fallback: reinstall MAU + retry
+# -----------------------------
+if [ $RESULT -ne 0 ]; then
+    echo "Update still failing. Reinstalling MAU..."
+
+    rm -rf "/Library/Application Support/Microsoft/MAU2.0"
+
+    curl -L -o "$MAU_PKG" "https://go.microsoft.com/fwlink/?linkid=830196"
+    /usr/sbin/installer -pkg "$MAU_PKG" -target /
+
+    sleep 5
+
+    echo "Retrying update after MAU reinstall..."
+
+    "$MSUPDATE" --install --apps ALL
+fi
+
+# -----------------------------
+# 10. Cleanup deferral file
+# -----------------------------
+rm -f "$DEFER_FILE"
+
+echo "Office update process completed"
+
+exit 0
