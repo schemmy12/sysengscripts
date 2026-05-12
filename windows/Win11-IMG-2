@@ -1,0 +1,231 @@
+# ==============================================
+# NEXT-LEVEL ZERO-TOUCH DEPLOYMENT SCRIPT
+# ==============================================
+# Features:
+# - Uses C:\Deploy as the working root
+# - Prioritizes Network drivers first
+# - Full driver install with model-aware paths
+# - GUI with progress + admin creation
+# - Logging
+# - Optional Lenovo/HP tools hook
+# - Auto-run capable (RunOnce)
+# ==============================================
+
+# ---------------- CONFIG ----------------
+$DeployRoot = "C:\Deploy"
+$BaseDriverPath = Join-Path $DeployRoot "Drivers"
+$LogPath = Join-Path $DeployRoot "DeploymentLog.txt"
+$CompanyName = "IT Zero-Touch Setup"
+$OsFolder = "W11_25H2"
+
+New-Item -ItemType Directory -Path $DeployRoot -Force | Out-Null
+
+function Write-Log {
+    param ([string]$Message)
+    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+    "$timestamp - $Message" | Out-File -Append -FilePath $LogPath -Encoding utf8
+    Write-Host $Message
+}
+
+Write-Log "===== STARTING ZERO-TOUCH DEPLOYMENT ====="
+Write-Log "Deploy root: $DeployRoot"
+Write-Log "Driver root: $BaseDriverPath"
+
+# ---------------- DETECT NETWORK ----------------
+$NetworkUp = Get-NetAdapter -ErrorAction SilentlyContinue | Where-Object { $_.Status -eq "Up" }
+if (-not $NetworkUp) {
+    Write-Log "No active network detected before driver install - prioritizing NIC drivers"
+} else {
+    Write-Log "Network already active before driver install"
+}
+
+# ---------------- DRIVER INSTALL ----------------
+try {
+    $SystemInfo = Get-CimInstance Win32_ComputerSystem
+    $Manufacturer = $SystemInfo.Manufacturer
+    $Model = $SystemInfo.Model
+
+    Write-Log "Manufacturer: $Manufacturer"
+    Write-Log "Model: $Model"
+
+    if ($Manufacturer -like "*Lenovo*") {
+        $DriverPath = Join-Path $BaseDriverPath "Lenovo\$Model\$OsFolder"
+    }
+    elseif ($Manufacturer -like "*HP*") {
+        $DriverPath = Join-Path $BaseDriverPath "HP\$Model\$OsFolder"
+    }
+    else {
+        $DriverPath = Join-Path $BaseDriverPath "Generic"
+    }
+
+    if (-not (Test-Path $DriverPath)) {
+        Write-Log "Model-specific path not found: $DriverPath"
+        $DriverPath = Join-Path $BaseDriverPath "Generic"
+        Write-Log "Falling back to: $DriverPath"
+    }
+
+    if (Test-Path $DriverPath) {
+        Write-Log "Resolved driver path: $DriverPath"
+
+        # Install Network drivers FIRST
+        $NetworkPath = Join-Path $DriverPath "Network"
+        if (Test-Path $NetworkPath) {
+            Write-Log "Installing network drivers first from: $NetworkPath"
+            $NetworkDrivers = Get-ChildItem -Path $NetworkPath -Recurse -Filter *.inf -ErrorAction SilentlyContinue
+            foreach ($driver in $NetworkDrivers) {
+                Write-Log "Installing network driver: $($driver.FullName)"
+                pnputil /add-driver "$($driver.FullName)" /install | Out-Null
+            }
+        }
+        else {
+            Write-Log "No Network folder found under: $DriverPath"
+        }
+
+        Start-Sleep -Seconds 5
+        $NetworkUpAfterNIC = Get-NetAdapter -ErrorAction SilentlyContinue | Where-Object { $_.Status -eq "Up" }
+        if ($NetworkUpAfterNIC) {
+            Write-Log "Network adapter is up after NIC driver installation"
+        }
+        else {
+            Write-Log "No active network yet after NIC driver installation"
+        }
+
+        # Install remaining drivers, excluding Network to avoid duplicate work
+        $RemainingDriverFolders = Get-ChildItem -Path $DriverPath -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne "Network" }
+        foreach ($folder in $RemainingDriverFolders) {
+            $drivers = Get-ChildItem -Path $folder.FullName -Recurse -Filter *.inf -ErrorAction SilentlyContinue
+            foreach ($driver in $drivers) {
+                Write-Log "Installing driver: $($driver.FullName)"
+                pnputil /add-driver "$($driver.FullName)" /install | Out-Null
+            }
+        }
+
+        # Fallback in case any INFs live directly under the model root
+        $RootDrivers = Get-ChildItem -Path $DriverPath -File -Filter *.inf -ErrorAction SilentlyContinue
+        foreach ($driver in $RootDrivers) {
+            Write-Log "Installing root-level driver: $($driver.FullName)"
+            pnputil /add-driver "$($driver.FullName)" /install | Out-Null
+        }
+
+        Write-Log "Drivers installed"
+    }
+    else {
+        Write-Log "No valid driver path found. Skipping driver install."
+    }
+}
+catch {
+    Write-Log "Driver error: $_"
+}
+
+# ---------------- OPTIONAL OEM TOOLS ----------------
+if (Test-Connection -Count 1 google.com -Quiet -ErrorAction SilentlyContinue) {
+    Write-Log "Network detected - OEM tools could run here"
+    # Placeholder for Lenovo System Update or HP Image Assistant
+}
+
+# ---------------- GUI WITH PROGRESS ----------------
+Add-Type -AssemblyName System.Windows.Forms
+Add-Type -AssemblyName System.Drawing
+
+$form = New-Object System.Windows.Forms.Form
+$form.Text = $CompanyName
+$form.Size = "420,300"
+$form.StartPosition = "CenterScreen"
+$form.Topmost = $true
+
+$progress = New-Object System.Windows.Forms.ProgressBar
+$progress.Location = "50,20"
+$progress.Size = "300,20"
+$progress.Style = "Continuous"
+$progress.Value = 70
+$form.Controls.Add($progress)
+
+# Username
+$userBox = New-Object System.Windows.Forms.TextBox
+$userBox.Location = "150,80"
+$userBox.Width = 180
+$form.Controls.Add($userBox)
+
+$userLabel = New-Object System.Windows.Forms.Label
+$userLabel.Text = "Username"
+$userLabel.Location = "50,80"
+$form.Controls.Add($userLabel)
+
+# Password
+$passBox = New-Object System.Windows.Forms.TextBox
+$passBox.Location = "150,120"
+$passBox.Width = 180
+$passBox.UseSystemPasswordChar = $true
+$form.Controls.Add($passBox)
+
+$passLabel = New-Object System.Windows.Forms.Label
+$passLabel.Text = "Password"
+$passLabel.Location = "50,120"
+$form.Controls.Add($passLabel)
+
+# Confirm
+$confirmBox = New-Object System.Windows.Forms.TextBox
+$confirmBox.Location = "150,160"
+$confirmBox.Width = 180
+$confirmBox.UseSystemPasswordChar = $true
+$form.Controls.Add($confirmBox)
+
+$confirmLabel = New-Object System.Windows.Forms.Label
+$confirmLabel.Text = "Confirm"
+$confirmLabel.Location = "50,160"
+$form.Controls.Add($confirmLabel)
+
+# Button
+$btn = New-Object System.Windows.Forms.Button
+$btn.Text = "Finish Setup"
+$btn.Location = "140,210"
+$btn.Width = 120
+
+$btn.Add_Click({
+    if ([string]::IsNullOrWhiteSpace($userBox.Text) -or [string]::IsNullOrWhiteSpace($passBox.Text)) {
+        [System.Windows.Forms.MessageBox]::Show("Username and password are required")
+        return
+    }
+
+    if ($passBox.Text.Length -lt 8) {
+        [System.Windows.Forms.MessageBox]::Show("Password must be at least 8 characters")
+        return
+    }
+
+    if ($passBox.Text -ne $confirmBox.Text) {
+        [System.Windows.Forms.MessageBox]::Show("Passwords do not match")
+        return
+    }
+
+    try {
+        if (Get-LocalUser -Name $userBox.Text -ErrorAction SilentlyContinue) {
+            [System.Windows.Forms.MessageBox]::Show("User already exists")
+            return
+        }
+
+        $secure = ConvertTo-SecureString $passBox.Text -AsPlainText -Force
+        New-LocalUser -Name $userBox.Text -Password $secure -FullName "Local Admin" -Description "Created by deployment script"
+        Add-LocalGroupMember -Group "Administrators" -Member $userBox.Text
+
+        Write-Log "User created: $($userBox.Text)"
+        $progress.Value = 100
+        [System.Windows.Forms.MessageBox]::Show("Setup Complete")
+        $form.Close()
+    }
+    catch {
+        Write-Log "User creation error: $_"
+        [System.Windows.Forms.MessageBox]::Show("Error creating user")
+    }
+})
+
+$form.Controls.Add($btn)
+[void]$form.ShowDialog()
+
+# ---------------- AUTO-RUN OPTION ----------------
+# Run once at next login if needed
+# New-ItemProperty -Path "HKLM:\Software\Microsoft\Windows\CurrentVersion\RunOnce" -Name "Deploy" -Value "powershell.exe -ExecutionPolicy Bypass -File C:\Deploy\Deploy-Setup.ps1" -PropertyType String -Force
+
+# ---------------- REBOOT ----------------
+Restart-Computer -Force
+
+Write-Log "===== COMPLETE ====="
