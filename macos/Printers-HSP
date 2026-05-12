@@ -1,0 +1,42 @@
+#!/bin/bash
+
+DRIVER_PATH="/Library/Printers/PPDs/Contents/Resources/KONICAMINOLTAC451i.gz"
+
+PRINTER_LIST=(
+"NY - 11th Floor Copy Room - Konica C451i - 53x|ipp://10.200.120.170/ipp"
+"NY - 12th Floor Copy Room - Konica C451i - 53x|ipp://10.200.120.164/ipp"
+"SF - Expansion - Konica C451i - 53x|ipp://10.211.120.11/ipp"
+"SM - Copy Room - Konica C451i - 53x|ipp://10.214.120.10/ipp"
+"VA - Kitchen - Konica C451i|ipp://172.25.10.85/ipp"
+"SF - Copy Room - Konica C451i - 53x|ipp://10.211.120.10/ipp"
+"MP - 1st Floor Copy Room - Konica C451i|ipp://172.16.0.50/ipp"
+"MP - 2nd Floor Copy Room - Konica C451i|ipp://172.16.0.51/ipp"
+"MP - 3rd Floor Copy Room - Konica C451i|ipp://172.16.0.52/ipp"
+"LA - Copy Room - Konica C451i - 53x|ipp://10.204.120.10/ipp"
+)
+
+for ENTRY in "${PRINTER_LIST[@]}"; do
+
+    DISPLAY_NAME="${ENTRY%%|*}"
+    PRINTER_URI="${ENTRY##*|}"
+
+    # Create safe queue name (replace spaces + invalid chars)
+    QUEUE_NAME=$(echo "$DISPLAY_NAME" | tr ' ' '_' | tr -cd '[:alnum:]_-')
+
+    if lpstat -p | awk '{print $2}' | grep -qx "$QUEUE_NAME"; then
+        echo "$DISPLAY_NAME already installed."
+    else
+        echo "Installing $DISPLAY_NAME..."
+        lpadmin -p "$QUEUE_NAME" -E -v "$PRINTER_URI" -P "$DRIVER_PATH" -D "$DISPLAY_NAME"
+
+        if [ $? -ne 0 ]; then
+            echo "FAILED to install $DISPLAY_NAME"
+        else
+            echo "Successfully installed $DISPLAY_NAME"
+        fi
+    fi
+
+done
+
+jamf recon
+exit 0

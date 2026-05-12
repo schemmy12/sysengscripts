@@ -1,0 +1,238 @@
+#!/bin/bash
+
+#####################################################################
+# Chrome Zero-Day Remediation Script
+# - Allows 3 deferrals
+# - Enforces update after 48 hours
+# - Closes Chrome
+# - Runs Jamf custom trigger to update Chrome
+# - Reopens Chrome only if it was running before
+#####################################################################
+
+JAMF_HELPER="/Library/Application Support/JAMF/bin/jamfHelper.app/Contents/MacOS/jamfHelper"
+JAMF_BINARY="/usr/local/bin/jamf"
+CHROME_APP="/Applications/Google Chrome.app"
+
+# Change this to your Chrome update policy custom trigger in Jamf
+CHROME_TRIGGER="chrome_update"
+
+# State files
+STATE_DIR="/var/tmp/chrome_update_enforcement"
+DEFER_COUNT_FILE="$STATE_DIR/defer_count"
+START_TIME_FILE="$STATE_DIR/start_time"
+
+# Settings
+MAX_DEFERRALS=3
+ENFORCEMENT_WINDOW_HOURS=48
+ENFORCEMENT_WINDOW_SECONDS=$((48 * 60 * 60))
+USER_TIMEOUT=300
+
+echo "Starting Chrome remediation..."
+
+mkdir -p "$STATE_DIR"
+
+# -----------------------------
+# 1. Validate dependencies
+# -----------------------------
+if [ ! -x "$JAMF_HELPER" ]; then
+    echo "ERROR: jamfHelper not found at $JAMF_HELPER"
+    exit 1
+fi
+
+if [ ! -x "$JAMF_BINARY" ]; then
+    echo "ERROR: jamf binary not found at $JAMF_BINARY"
+    exit 1
+fi
+
+# -----------------------------
+# 2. Get logged-in user
+# -----------------------------
+CURRENT_USER=$(stat -f %Su /dev/console)
+
+if [ -z "$CURRENT_USER" ]; then
+    CURRENT_USER="root"
+fi
+
+echo "Current user: $CURRENT_USER"
+
+# -----------------------------
+# 3. Initialize enforcement timer
+# -----------------------------
+CURRENT_EPOCH=$(date +%s)
+
+if [ ! -f "$START_TIME_FILE" ]; then
+    echo "$CURRENT_EPOCH" > "$START_TIME_FILE"
+    echo "Created enforcement start time: $CURRENT_EPOCH"
+fi
+
+START_EPOCH=$(cat "$START_TIME_FILE" 2>/dev/null)
+if ! [[ "$START_EPOCH" =~ ^[0-9]+$ ]]; then
+    START_EPOCH="$CURRENT_EPOCH"
+    echo "$START_EPOCH" > "$START_TIME_FILE"
+fi
+
+ELAPSED_SECONDS=$((CURRENT_EPOCH - START_EPOCH))
+REMAINING_SECONDS=$((ENFORCEMENT_WINDOW_SECONDS - ELAPSED_SECONDS))
+REMAINING_HOURS=$((REMAINING_SECONDS / 3600))
+
+# -----------------------------
+# 4. Read deferral count
+# -----------------------------
+if [ -f "$DEFER_COUNT_FILE" ]; then
+    DEFER_COUNT=$(cat "$DEFER_COUNT_FILE" 2>/dev/null)
+else
+    DEFER_COUNT=0
+fi
+
+if ! [[ "$DEFER_COUNT" =~ ^[0-9]+$ ]]; then
+    DEFER_COUNT=0
+fi
+
+echo "Deferral count: $DEFER_COUNT / $MAX_DEFERRALS"
+echo "Elapsed seconds: $ELAPSED_SECONDS"
+
+# -----------------------------
+# 5. Determine if enforcement is required
+# -----------------------------
+FORCE_UPDATE=false
+
+if [ "$ELAPSED_SECONDS" -ge "$ENFORCEMENT_WINDOW_SECONDS" ]; then
+    echo "48-hour deadline reached."
+    FORCE_UPDATE=true
+fi
+
+if [ "$DEFER_COUNT" -ge "$MAX_DEFERRALS" ]; then
+    echo "Maximum deferrals reached."
+    FORCE_UPDATE=true
+fi
+
+# -----------------------------
+# 6. Track whether Chrome was open
+# -----------------------------
+CHROME_WAS_RUNNING=false
+
+if pgrep -x "Google Chrome" >/dev/null 2>&1; then
+    CHROME_WAS_RUNNING=true
+    echo "Chrome was running before update."
+else
+    echo "Chrome was not running before update."
+fi
+
+# -----------------------------
+# 7. User messaging
+# -----------------------------
+if [ "$CURRENT_USER" != "root" ]; then
+
+    if [ "$FORCE_UPDATE" = false ]; then
+        REMAINING_DEFERRALS=$((MAX_DEFERRALS - DEFER_COUNT))
+        if [ "$REMAINING_HOURS" -lt 0 ]; then
+            REMAINING_HOURS=0
+        fi
+
+        DESCRIPTION="A critical Google Chrome security update is required.
+
+Google Chrome will need to close to complete the update.
+
+Please save your work before continuing.
+
+You may defer this update up to $REMAINING_DEFERRALS more time(s), but it will be enforced automatically within 48 hours of the first notification.
+
+Approximate time remaining before enforcement: $REMAINING_HOURS hour(s)
+
+Hillspire IT Team"
+
+        RESPONSE=$(sudo -u "$CURRENT_USER" "$JAMF_HELPER" \
+            -windowType utility \
+            -title "Google Chrome Security Update Required" \
+            -heading "Critical Chrome Update Required" \
+            -description "$DESCRIPTION" \
+            -button1 "Update Now" \
+            -button2 "Defer" \
+            -defaultButton 1 \
+            -cancelButton 2 \
+            -timeout "$USER_TIMEOUT" \
+            -countdown \
+            -icon "$CHROME_APP/Contents/Resources/app.icns")
+
+        echo "jamfHelper response: $RESPONSE"
+
+        if [ "$RESPONSE" = "2" ]; then
+            DEFER_COUNT=$((DEFER_COUNT + 1))
+            echo "$DEFER_COUNT" > "$DEFER_COUNT_FILE"
+            echo "User deferred. New deferral count: $DEFER_COUNT"
+            exit 0
+        fi
+
+    else
+        if [ "$ELAPSED_SECONDS" -ge "$ENFORCEMENT_WINDOW_SECONDS" ]; then
+            REASON="the 48-hour deadline has been reached"
+        else
+            REASON="the maximum number of deferrals has been reached"
+        fi
+
+        DESCRIPTION="A critical Google Chrome security update is now required because $REASON.
+
+Google Chrome will close in 5 minutes to complete the update.
+
+Please save your work now.
+
+Hillspire IT Team"
+
+        sudo -u "$CURRENT_USER" "$JAMF_HELPER" \
+            -windowType utility \
+            -title "Google Chrome Security Update Required" \
+            -heading "Updating Google Chrome" \
+            -description "$DESCRIPTION" \
+            -button1 "OK" \
+            -defaultButton 1 \
+            -timeout "$USER_TIMEOUT" \
+            -countdown \
+            -icon "$CHROME_APP/Contents/Resources/app.icns"
+    fi
+
+else
+    echo "No logged-in user. Proceeding silently."
+fi
+
+# -----------------------------
+# 8. Close Chrome
+# -----------------------------
+echo "Closing Google Chrome..."
+
+pkill -x "Google Chrome"
+sleep 3
+
+if pgrep -x "Google Chrome" >/dev/null 2>&1; then
+    echo "Chrome still running, forcing quit..."
+    pkill -9 -x "Google Chrome"
+fi
+
+sleep 2
+
+# -----------------------------
+# 9. Run Jamf policy to update Chrome
+# -----------------------------
+echo "Running Jamf policy trigger: $CHROME_TRIGGER"
+"$JAMF_BINARY" policy -event "$CHROME_TRIGGER"
+RESULT=$?
+
+echo "Jamf policy result: $RESULT"
+
+# -----------------------------
+# 10. Reopen Chrome if needed
+# -----------------------------
+if [ "$RESULT" -eq 0 ]; then
+    echo "Chrome update completed successfully."
+
+    if [ "$CHROME_WAS_RUNNING" = true ] && [ "$CURRENT_USER" != "root" ]; then
+        echo "Reopening Google Chrome because it was previously running..."
+        sudo -u "$CURRENT_USER" open -a "Google Chrome"
+    fi
+
+    rm -f "$DEFER_COUNT_FILE" "$START_TIME_FILE"
+    rmdir "$STATE_DIR" 2>/dev/null
+    exit 0
+else
+    echo "Chrome update failed."
+    exit 1
+fi
