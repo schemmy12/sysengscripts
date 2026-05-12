@@ -346,6 +346,12 @@ function getUniversities(person) {
   const values = UNIVERSITY_FIELDS.flatMap(field => fieldValues(person[field]));
   return [...new Set(values)].sort((a,b) => a.localeCompare(b));
 }
+function representedCountries(person) {
+  return (person.countries || "")
+    .split(",")
+    .map(v => v.trim())
+    .filter(Boolean);
+}
 
 function populateFilter(id, values) {
   const sel = document.getElementById(id);
@@ -360,7 +366,7 @@ function populateFilter(id, values) {
 }
 function buildFilters(people) {
   populateFilter("f-location", people.map(p => p.country));
-  populateFilter("f-country",  people.map(p => p.countries));
+  populateFilter("f-country",  people.flatMap(representedCountries));
   populateFilter("f-year",     people.map(p => String(p.year)));
   populateFilter("f-university", people.flatMap(getUniversities));
 }
@@ -375,7 +381,7 @@ function applyFilters() {
     const universityText = universities.join(", ");
     const mQ   = !q   || [p.name,p.bio,p.country,p.city,p.countries,String(p.year),universityText].some(v=>(v||"").toLowerCase().includes(q));
     const mLoc = !loc || p.country === loc;
-    const mCty = !cty || p.countries === cty;
+    const mCty = !cty || representedCountries(p).includes(cty);
     const mYr  = !yr  || String(p.year) === yr;
     const mUni = !uni || universities.includes(uni);
     return mQ && mLoc && mCty && mYr && mUni;

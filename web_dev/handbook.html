@@ -67,6 +67,11 @@ body{font-family:'Poppins',sans-serif;background:var(--off-white);color:var(--te
 .content-panel{display:none;background:#fff;border:1px solid var(--border);border-radius:10px;padding:32px 36px;}
 .content-panel.active{display:block;}
 .content-panel h2{font-size:21px;font-weight:800;color:var(--navy);margin-bottom:20px;padding-bottom:14px;border-bottom:2px solid var(--gold);line-height:1.3;}
+.section-heading{display:flex;align-items:center;gap:10px;margin-bottom:20px;padding-bottom:14px;border-bottom:2px solid var(--gold);}
+.section-heading h2{flex:1;margin:0;padding:0;border:0;}
+.copy-section-link{width:32px;height:32px;border:1px solid var(--border);border-radius:7px;background:#fff;color:var(--bright-blue);display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;transition:background .15s,border-color .15s,color .15s;}
+.copy-section-link:hover,.copy-section-link:focus{background:#f4f7ff;border-color:#b9c8dc;outline:none;}
+.copy-section-link.copied{background:var(--bright-blue);border-color:var(--bright-blue);color:#fff;}
 .content-panel h3{font-size:15px;font-weight:700;color:var(--navy);margin:22px 0 10px;}
 .content-panel h4{font-size:14px;font-weight:600;color:var(--bright-blue);margin:16px 0 8px;}
 .content-panel p{font-size:14px;line-height:1.8;color:var(--text);margin-bottom:12px;}
@@ -360,6 +365,42 @@ function updateSectionHash(secId) {
   if (!slug) return;
   const nextHash = `#${encodeURIComponent(slug)}`;
   if (window.location.hash !== nextHash) history.pushState(null, '', nextHash);
+}
+function sectionUrl(slug) {
+  const url = new URL(window.location.href);
+  url.hash = encodeURIComponent(slug);
+  return url.toString();
+}
+function copyTextFallback(text) {
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.setAttribute('readonly', '');
+  textarea.style.position = 'fixed';
+  textarea.style.left = '-9999px';
+  document.body.appendChild(textarea);
+  textarea.select();
+  try { document.execCommand('copy'); } catch(e) {}
+  document.body.removeChild(textarea);
+}
+async function copySectionLink(slug, btn) {
+  const url = sectionUrl(slug);
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(url);
+    } else {
+      copyTextFallback(url);
+    }
+    btn.classList.add('copied');
+    btn.title = 'Copied';
+    btn.setAttribute('aria-label', 'Section link copied');
+    setTimeout(() => {
+      btn.classList.remove('copied');
+      btn.title = 'Copy section link';
+      btn.setAttribute('aria-label', 'Copy section link');
+    }, 1200);
+  } catch(e) {
+    copyTextFallback(url);
+  }
 }
 // Auto-link URLs and emails in already-escaped text. Run AFTER esc(), never before.
 // URL regex matches http(s)://... up to whitespace or common trailing punctuation.
@@ -664,7 +705,12 @@ function buildPanels() {
       const secId = sec.id || `c${ci}s${si}`;
       const slug = sec.slug || secId;
       secHtml += `<div class="content-panel" id="panel-${secId}" data-section-slug="${escAttr(slug)}">
-        <h2 id="${escAttr(slug)}">${esc(stripNum(sec.title))}</h2>
+        <div class="section-heading">
+          <h2 id="${escAttr(slug)}">${esc(stripNum(sec.title))}</h2>
+          <button class="copy-section-link" type="button" title="Copy section link" aria-label="Copy link to ${escAttr(stripNum(sec.title))}" onclick="copySectionLink('${escAttr(slug)}', this)">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.1 0l2-2a5 5 0 0 0-7.1-7.1l-1.1 1.1"/><path d="M14 11a5 5 0 0 0-7.1 0l-2 2a5 5 0 0 0 7.1 7.1l1.1-1.1"/></svg>
+          </button>
+        </div>
         ${renderContent(sec.content, sec.title)}
       </div>`;
     });
