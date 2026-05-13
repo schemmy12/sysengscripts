@@ -1061,8 +1061,8 @@ function normaliseEvent(id, f) {
   return {
     id,
     name:        f["Event Name"]   || "",
-    date:        f["Start Date"]   || "",
-    endDate:     f["End Date"]     || "",
+    date:        dateOnlyString(f["Start Date"]),
+    endDate:     dateOnlyString(f["End Date"]),
     time:        f["Event Time"]   || "",
     type:        f["Type"]         || "",
     category:    f["Category"]     || "",
@@ -1072,6 +1072,12 @@ function normaliseEvent(id, f) {
     link:        f["URL"]          || "",
     status:      f["Event Status"] || "",
   };
+}
+
+function dateOnlyString(value) {
+  const text = fieldText(value);
+  const match = text.match(/^(\d{4}-\d{2}-\d{2})/);
+  return match ? match[1] : text;
 }
 
 // ── Shared helpers ────────────────────────────────────────────────────

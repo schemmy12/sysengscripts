@@ -25,7 +25,7 @@ body{font-family:'Poppins',sans-serif;background:var(--off-white);color:var(--te
 .logo-icon{width:120px;height:64px;flex-shrink:0;}
 .logo-icon img{width:100%;height:100%;object-fit:contain;}
 .hero-body{padding:24px 0 36px;position:relative;z-index:1;}
-.hero-title{font-size:42px;font-weight:800;color:var(--gold);font-family:'Poppins',sans-serif;line-height:1.1;font-style:italic;letter-spacing:-.5px;padding-left:16px;}
+.hero-title{font-size:42px;font-weight:800;color:var(--gold);font-family:'Poppins',sans-serif;line-height:1.1;letter-spacing:-.5px;padding-left:16px;}
 
 /* ── Search ── */
 .search-wrap{background:#fff;border-bottom:1px solid var(--border);padding:14px 20px;position:sticky;top:0;z-index:100;}
@@ -609,7 +609,7 @@ function renderPageNavigation(items) {
     <div class="page-nav-title">Page Navigation:</div>
     <ul>${items.map(item => `
       <li>
-        <a href="#${escAttr(item.id)}" onclick="event.preventDefault(); scrollToPageHeading('${escAttr(item.id)}')">${esc(item.title)}</a>
+        <a href="#${escAttr(item.id)}" data-page-heading="${escAttr(item.id)}">${esc(item.title)}</a>
       </li>
     `).join('')}</ul>
   </nav>`;
@@ -618,6 +618,8 @@ function scrollToPageHeading(id) {
   const heading = document.getElementById(id);
   if (!heading) return false;
   heading.scrollIntoView({ behavior:'smooth', block:'start' });
+  setTimeout(() => heading.scrollIntoView({ behavior:'smooth', block:'start' }), 150);
+  setTimeout(() => heading.scrollIntoView({ behavior:'smooth', block:'start' }), 450);
   return false;
 }
 
@@ -988,6 +990,12 @@ document.getElementById('hb-search').addEventListener('keydown', e => {
 });
 document.addEventListener('click', e => {
   if (!e.target.closest('.search-inner')) closeSearchResults();
+});
+document.addEventListener('click', e => {
+  const link = e.target.closest('[data-page-heading]');
+  if (!link) return;
+  e.preventDefault();
+  scrollToPageHeading(link.dataset.pageHeading);
 });
 
 // ── Fetch and init ──

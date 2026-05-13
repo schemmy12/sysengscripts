@@ -29,7 +29,6 @@ body.full-mode .widget-title{font-size:18px;}
 .widget-subtitle{font-size:11px;font-weight:500;opacity:.78;margin-top:1px;}
 .newsletter-card{padding:16px;}
 body.full-mode .newsletter-card{padding:20px;}
-.newsletter-date{font-size:11px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--bright-blue);margin-bottom:7px;}
 .newsletter-title{font-size:16px;font-weight:800;line-height:1.3;color:var(--navy);margin-bottom:7px;}
 body.full-mode .newsletter-title{font-size:20px;margin-bottom:8px;}
 .newsletter-preview{font-size:12px;line-height:1.5;color:var(--muted);margin-bottom:14px;}
@@ -114,14 +113,12 @@ function renderNewsletter(data) {
     return;
   }
 
-  const date = formatSendDate(newsletter.sendTime);
   const title = newsletter.title || newsletter.subject || "Latest newsletter";
   const preview = newsletter.previewText || newsletter.subject || "";
   const url = newsletter.longArchiveUrl || newsletter.archiveUrl || "";
   const showOpenButton = MODE !== "full";
   content.className = "";
   content.innerHTML = `<article class="newsletter-card">
-    ${date ? `<div class="newsletter-date">${esc(date)}</div>` : ""}
     <h2 class="newsletter-title">${esc(title)}</h2>
     ${preview ? `<p class="newsletter-preview">${esc(preview)}</p>` : ""}
     ${url && showOpenButton ? `<div class="newsletter-actions">

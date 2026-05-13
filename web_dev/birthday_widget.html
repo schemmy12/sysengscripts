@@ -98,10 +98,10 @@ function dayLabel(day) {
 }
 function renderBirthdays(birthdays, monthName) {
   const content = document.getElementById("birthday-content");
-  document.getElementById("widget-subtitle").textContent = monthName ? `${monthName} birthdays` : "Rise Fellows";
+  document.getElementById("widget-subtitle").textContent = monthName ? `${monthName} Birthdays` : "Rise Fellows";
   if (!birthdays.length) {
     content.className = "status";
-    content.textContent = monthName ? `No ${monthName} birthdays found.` : "No birthdays found.";
+    content.textContent = monthName ? `No ${monthName} Birthdays found.` : "No Birthdays found.";
     return;
   }
   content.className = "";

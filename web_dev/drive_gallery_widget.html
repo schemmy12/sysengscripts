@@ -65,7 +65,7 @@ body{font-family:'Poppins',sans-serif;background:transparent;color:var(--text);}
       </div>
     </div>
     <a class="open-folder" id="open-folder" href="#" target="_blank" rel="noopener">
-      Open folder
+      Open Folder
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" aria-hidden="true"><path d="M7 17 17 7"/><path d="M7 7h10v10"/></svg>
     </a>
   </div>
@@ -116,7 +116,7 @@ function renderItem(item) {
 function renderGallery(data) {
   const title = TITLE || data.title || "Photo Gallery";
   document.getElementById("gallery-title").textContent = title;
-  document.getElementById("gallery-subtitle").textContent = `${data.count || 0} items`;
+  document.getElementById("gallery-subtitle").textContent = `${data.count || 0} Items`;
   const openFolder = document.getElementById("open-folder");
   openFolder.href = `https://drive.google.com/drive/folders/${encodeURIComponent(data.folderId)}`;
   openFolder.classList.add("show");
