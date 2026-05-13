@@ -617,9 +617,18 @@ function renderPageNavigation(items) {
 function scrollToPageHeading(id) {
   const heading = document.getElementById(id);
   if (!heading) return false;
-  heading.scrollIntoView({ behavior:'smooth', block:'start' });
-  setTimeout(() => heading.scrollIntoView({ behavior:'smooth', block:'start' }), 150);
-  setTimeout(() => heading.scrollIntoView({ behavior:'smooth', block:'start' }), 450);
+
+  const panel = heading.closest('.content-panel') || document.body;
+  const scrollTop = window.pageYOffset || document.documentElement.scrollTop || 0;
+  const topOffset = 96;
+  const bottomPad = Math.min(120, Math.max(56, window.innerHeight * 0.12));
+  const targetY = scrollTop + heading.getBoundingClientRect().top - topOffset;
+  const panelBottomY = scrollTop + panel.getBoundingClientRect().bottom;
+  const usefulMaxY = panelBottomY - window.innerHeight + bottomPad;
+  const docMaxY = document.documentElement.scrollHeight - window.innerHeight;
+  const nextY = Math.max(0, Math.min(targetY, usefulMaxY, docMaxY));
+
+  window.scrollTo({ top: nextY, behavior:'smooth' });
   return false;
 }
 
