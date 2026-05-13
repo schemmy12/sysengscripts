@@ -206,6 +206,7 @@ body{font-family:'Poppins',sans-serif;background:var(--off-white);color:var(--te
 
 <script>
 const API_URL = "https://script.google.com/macros/s/AKfycbwDMZzrahIhHwlEcciQ4TcEOHOdih5h7Sy-Wg-uVfiSS_gNvZeGXr42TkK3RoS6MRm9Cg/exec";
+const CANONICAL_HANDBOOK_URL = "https://portal.risefortheworld.org/web_dev/handbook.html";
 
 const ICON_MAP = {
   'getting started':'🏠','programming':'🌐','applying':'🎓',
@@ -367,7 +368,7 @@ function updateSectionHash(secId) {
   if (window.location.hash !== nextHash) history.pushState(null, '', nextHash);
 }
 function sectionUrl(slug) {
-  const url = new URL(window.location.href);
+  const url = new URL(CANONICAL_HANDBOOK_URL);
   url.hash = encodeURIComponent(slug);
   return url.toString();
 }
