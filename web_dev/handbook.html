@@ -72,8 +72,16 @@ body{font-family:'Poppins',sans-serif;background:var(--off-white);color:var(--te
 .copy-section-link{width:32px;height:32px;border:1px solid var(--border);border-radius:7px;background:#fff;color:var(--bright-blue);display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;transition:background .15s,border-color .15s,color .15s;}
 .copy-section-link:hover,.copy-section-link:focus{background:#f4f7ff;border-color:#b9c8dc;outline:none;}
 .copy-section-link.copied{background:var(--bright-blue);border-color:var(--bright-blue);color:#fff;}
+.content-panel .page-nav{background:#e6f6f7;border-left:4px solid var(--teal);border-radius:0 6px 6px 0;margin:0 0 24px;padding:20px 26px;}
+.content-panel .page-nav-title{font-size:14px;font-weight:800;color:var(--navy);margin-bottom:12px;}
+.content-panel .page-nav ul{margin:0;padding-left:22px;}
+.content-panel .page-nav li{margin-bottom:8px;line-height:1.5;}
+.content-panel .page-nav li:last-child{margin-bottom:0;}
+.content-panel .page-nav a{font-size:13px;font-weight:500;color:var(--navy);text-decoration:underline;text-underline-offset:2px;}
+.content-panel .page-nav a:hover{color:var(--bright-blue);}
 .content-panel h3{font-size:15px;font-weight:700;color:var(--navy);margin:22px 0 10px;}
 .content-panel h4{font-size:14px;font-weight:600;color:var(--bright-blue);margin:16px 0 8px;}
+.content-panel h3[id]{scroll-margin-top:86px;}
 .content-panel p{font-size:14px;line-height:1.8;color:var(--text);margin-bottom:12px;}
 .content-panel ul,.content-panel ol{padding-left:24px;margin:8px 0 14px;}
 .content-panel li{font-size:14px;line-height:1.75;color:var(--text);margin-bottom:6px;padding-left:2px;}
@@ -577,12 +585,52 @@ function renderNestedList(items, type) {
 
   return renderListNodes(root.children, tag);
 }
+function pageHeadingItems(content, secSlug) {
+  const used = {};
+  return (content || []).reduce((items, el, idx) => {
+    if (!el || el.type !== 'h3') return items;
+    const title = toText(el.text).trim();
+    if (!title) return items;
 
-function renderContent(content, secTitle) {
+    const base = `${secSlug}-${slugifySectionTitle(title)}`;
+    const count = used[base] || 0;
+    used[base] = count + 1;
+    items.push({
+      id: count ? `${base}-${count + 1}` : base,
+      idx,
+      title
+    });
+    return items;
+  }, []);
+}
+function renderPageNavigation(items) {
+  if (!items || items.length < 2) return '';
+  return `<nav class="page-nav" aria-label="Page navigation">
+    <div class="page-nav-title">Page Navigation:</div>
+    <ul>${items.map(item => `
+      <li>
+        <a href="#${escAttr(item.id)}" onclick="event.preventDefault(); scrollToPageHeading('${escAttr(item.id)}')">${esc(item.title)}</a>
+      </li>
+    `).join('')}</ul>
+  </nav>`;
+}
+function scrollToPageHeading(id) {
+  const heading = document.getElementById(id);
+  if (!heading) return false;
+  heading.scrollIntoView({ behavior:'smooth', block:'start' });
+  return false;
+}
+
+function renderContent(content, secTitle, secSlug) {
   const isUniSection = secTitle && secTitle.includes('12.');
   let uniRendered = false;
-  return content.map(el => {
-    if (el.type === 'h3') return `<h3${docLayoutStyle(el)}>${renderRichText(el)}</h3>`;
+  const headings = pageHeadingItems(content, secSlug || slugifySectionTitle(secTitle));
+  const headingIdByIndex = headings.reduce((map, item) => {
+    map[item.idx] = item.id;
+    return map;
+  }, {});
+  return renderPageNavigation(headings) + content.map((el, idx) => {
+    if (el.type === 'h3') return `<h3 id="${escAttr(headingIdByIndex[idx] || '')}"${docLayoutStyle(el)}>${renderRichText(el)}</h3>`;
     if (el.type === 'h4') return `<h4${docLayoutStyle(el)}>${renderRichText(el)}</h4>`;
     if (el.type === 'embed') {
       // New: parser extracted a real embed URL → render as iframe
@@ -712,7 +760,7 @@ function buildPanels() {
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.1 0l2-2a5 5 0 0 0-7.1-7.1l-1.1 1.1"/><path d="M14 11a5 5 0 0 0-7.1 0l-2 2a5 5 0 0 0 7.1 7.1l1.1-1.1"/></svg>
           </button>
         </div>
-        ${renderContent(sec.content, sec.title)}
+        ${renderContent(sec.content, sec.title, slug)}
       </div>`;
     });
   });
