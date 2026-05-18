@@ -1,0 +1,37 @@
+name: Okta Audit Log
+
+on:
+  schedule:
+    # Every 15 minutes. GH may delay sub-15m schedules during high load.
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: okta-audit-log
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: integrations/okta_audit_log/requirements.txt
+
+      - run: pip install -r integrations/okta_audit_log/requirements.txt
+
+      - run: python integrations/okta_audit_log/audit.py
+        env:
+          OKTA_DOMAIN: ${{ secrets.OKTA_DOMAIN }}
+          OKTA_API_TOKEN: ${{ secrets.OKTA_API_TOKEN }}
+          OKTA_ADMIN_URL: ${{ secrets.OKTA_ADMIN_URL }}
+          CONFLUENCE_BASE_URL: ${{ secrets.CONFLUENCE_BASE_URL }}
+          CONFLUENCE_EMAIL: ${{ secrets.CONFLUENCE_EMAIL }}
+          CONFLUENCE_API_TOKEN: ${{ secrets.CONFLUENCE_API_TOKEN }}
+          CONFLUENCE_SPACE_KEY: ${{ secrets.CONFLUENCE_SPACE_KEY }}
+          CONFLUENCE_INDEX_PAGE_ID: ${{ secrets.CONFLUENCE_INDEX_PAGE_ID }}
