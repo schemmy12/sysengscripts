@@ -88,8 +88,8 @@ from GitHub secrets.
 
 | Month | Page | Groups Created | Apps Added | Assignments |
 | --- | --- | --- | --- | --- |
-| 2026-05 | [Okta Audit — 2026-05](.) | 4 | 2 | 7 |
-| 2026-04 | [Okta Audit — 2026-04](.) | 1 | 0 | 3 |
+| 2026-05 | [2026-05 Okta Audit Log](.) | 4 | 2 | 7 |
+| 2026-04 | [2026-04 Okta Audit Log](.) | 1 | 0 | 3 |
 
 **Monthly page** (one per calendar month, most recent at top):
 
