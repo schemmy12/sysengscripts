@@ -24,6 +24,8 @@ tools that make repeatable admin work faster and safer.
 ```text
 integrations/
   google_workspace_admin_assistant/  FastAPI Cloud Run Slack bot for Workspace admin Q&A
+  okta_audit_log/                    Polls Okta and writes a running audit log to Confluence
+  okta_profile_sync/                 Backfills Okta profile attributes from Google Workspace
   tee_time_alerts/                   Python/browser helper for availability alerts
   offboard_tasks.js                  Slack modal to route offboarding tasks to Okta Workflows
 
@@ -82,6 +84,21 @@ Examples of supported action patterns:
 - Forward mail
 - List delegation or group information
 - Trigger bundled offboarding actions through Okta Workflows
+
+### Okta Audit Log
+
+Location: `integrations/okta_audit_log`
+
+Python script run on a 15-minute GitHub Actions cron that polls the Okta
+System Log for new groups, new app integrations, and new group→app
+assignments, then appends rows to a monthly Confluence page. An index page
+tracks running counts and links to each month.
+
+State is stored as a hidden HTML comment on the index page, so the
+integration needs no external storage beyond GitHub secrets and the
+Confluence page itself.
+
+See `integrations/okta_audit_log/README.md` for setup steps.
 
 ### Tee Time Alerts
 
