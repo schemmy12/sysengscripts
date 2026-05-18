@@ -295,7 +295,7 @@ def month_key(dt: datetime) -> str:
 
 
 def month_title(dt: datetime) -> str:
-    return f"Okta Audit — {month_key(dt)}"
+    return f"{month_key(dt)} Okta Audit Log"
 
 
 def insert_rows_in_tbody(body: str, rows_html: str) -> str:
