@@ -6,6 +6,8 @@ audit page so the sys engineering team has a running log of:
 - New groups created in Okta (`group.lifecycle.create`)
 - New apps integrated in Okta (`application.lifecycle.create`)
 - New group → app assignments (`group.application_assignment.add`)
+- Admin role grants to users (`user.account.privilege.grant`)
+- Admin role grants to groups (`group.privilege.grant`)
 
 A parent **index page** lists every month with running counts and links to the
 per-month audit page. State (the last event timestamp we processed) lives in a
@@ -86,10 +88,10 @@ from GitHub secrets.
 
 **Index page** (auto-installed on first run):
 
-| Month | Page | Groups Created | Apps Added | Assignments |
-| --- | --- | --- | --- | --- |
-| 2026-05 | [2026-05 Okta Audit Log](.) | 4 | 2 | 7 |
-| 2026-04 | [2026-04 Okta Audit Log](.) | 1 | 0 | 3 |
+| Month | Page | Groups Created | Apps Added | Assignments | Admin Grants |
+| --- | --- | --- | --- | --- | --- |
+| 2026-05 | [2026-05 Okta Audit Log](.) | 4 | 2 | 7 | 1 |
+| 2026-04 | [2026-04 Okta Audit Log](.) | 1 | 0 | 3 | 0 |
 
 **Monthly page** (one per calendar month, most recent at top):
 
@@ -98,6 +100,7 @@ from GitHub secrets.
 | 2026-05-18T10:42:00Z | Steven Sutton | Group Created | [Engineering](.) |
 | 2026-05-18T10:35:00Z | Johnny Espinoza | App Added | [Snowflake](.) |
 | 2026-05-18T09:15:00Z | Adam Schembri | Group → App Assignment | [Engineering](.) → [Snowflake](.) |
+| 2026-05-18T08:30:00Z | Adam Schembri | Admin Role Granted (User) | [Jane Doe](.) → Super Administrator |
 
 ## Extending
 

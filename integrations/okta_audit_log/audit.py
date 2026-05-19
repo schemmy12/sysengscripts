@@ -57,6 +57,8 @@ EVENT_TYPES = (
     "group.lifecycle.create",
     "application.lifecycle.create",
     "group.application_assignment.add",
+    "user.account.privilege.grant",
+    "group.privilege.grant",
 )
 
 STATE_MARKER = "okta_audit_last_seen"
@@ -192,6 +194,7 @@ class Counts:
     groups: int = 0
     apps: int = 0
     assignments: int = 0
+    admin_grants: int = 0
 
 
 def _link(kind: str, target: dict) -> str:
@@ -203,6 +206,8 @@ def _link(kind: str, target: dict) -> str:
         href = f"{OKTA_ADMIN_URL}/admin/group/{tid}"
     elif kind == "app":
         href = f"{OKTA_ADMIN_URL}/admin/app/{tid}"
+    elif kind == "user":
+        href = f"{OKTA_ADMIN_URL}/admin/user/profile/view/{tid}"
     else:
         return name
     return f'<a href="{html.escape(href, quote=True)}">{name}</a>'
@@ -229,6 +234,22 @@ def event_to_row(event: dict) -> tuple[str, str]:
         group = _link("group", targets.get("UserGroup", {}))
         app = _link("app", targets.get("AppInstance", {}))
         detail = f"{group} → {app}"
+    elif etype in ("user.account.privilege.grant", "group.privilege.grant"):
+        category = "admin_grant"
+        is_user = etype == "user.account.privilege.grant"
+        label = "Admin Role Granted (User)" if is_user else "Admin Role Granted (Group)"
+        if is_user:
+            recipient = _link("user", targets.get("User", {}))
+        else:
+            recipient = _link("group", targets.get("UserGroup", {}))
+        role_target = next(
+            (t for t in event.get("target") or [] if t.get("type") in ("Role", "AdminRole")),
+            None,
+        )
+        role_name = (
+            html.escape(role_target.get("displayName") or "?") if role_target else "Unknown role"
+        )
+        detail = f"{recipient} → {role_name}"
     else:
         category = "other"
         label = html.escape(etype)
@@ -280,6 +301,7 @@ INDEX_TEMPLATE = (
     "<thead><tr>"
     "<th>Month</th><th>Page</th>"
     "<th>Groups Created</th><th>Apps Added</th><th>Assignments</th>"
+    "<th>Admin Grants</th>"
     "</tr></thead>"
     "<tbody></tbody>"
     "</table>"
@@ -369,17 +391,19 @@ def upsert_index_row(index_body: str, key: str, link_html: str, counts: Counts) 
         f"<td>{counts.groups}</td>"
         f"<td>{counts.apps}</td>"
         f"<td>{counts.assignments}</td>"
+        f"<td>{counts.admin_grants}</td>"
         "</tr>"
     )
     if pattern.search(index_body):
         # Existing row: parse current counts, add deltas, write back.
         existing = pattern.search(index_body).group(0)
         nums = re.findall(r"<td>(\d+)</td>", existing)
-        if len(nums) >= 3:
+        if len(nums) >= 4:
             counts = Counts(
                 groups=int(nums[0]) + counts.groups,
                 apps=int(nums[1]) + counts.apps,
                 assignments=int(nums[2]) + counts.assignments,
+                admin_grants=int(nums[3]) + counts.admin_grants,
             )
             new_row = (
                 f'<tr data-month="{html.escape(key, quote=True)}">'
@@ -388,6 +412,7 @@ def upsert_index_row(index_body: str, key: str, link_html: str, counts: Counts) 
                 f"<td>{counts.groups}</td>"
                 f"<td>{counts.apps}</td>"
                 f"<td>{counts.assignments}</td>"
+                f"<td>{counts.admin_grants}</td>"
                 "</tr>"
             )
         return pattern.sub(new_row, index_body, count=1)
@@ -449,6 +474,8 @@ def run() -> int:
                 counts.apps += 1
             elif category == "assignment":
                 counts.assignments += 1
+            elif category == "admin_grant":
+                counts.admin_grants += 1
 
         append_to_monthly_page(page, rows)
 
